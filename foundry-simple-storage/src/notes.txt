@@ -1,0 +1,3 @@
+To compile a smart contract on foudry we use the "forge build" command
+To deploy the smart contract anvil we use "forge create contractName --rpc-url http://asd --private-key asdnhajshd" and enter the private of either one the accounts from anvil
+To deploy the smart contract using the script we use "forge script script/DeploySimpleStorage.s.sol --rpc-url http://asjdasda --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" using this command we deploy it using the script
