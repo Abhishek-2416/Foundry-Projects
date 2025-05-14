@@ -28,7 +28,7 @@ interface ERC20Interface {
 contract ManualToken is ERC20Interface{
     string public name = "AbhiToken";
     string public symbol = "ABHI";
-    uint8 public decimals = 0; //18 is the most used value
+    uint8 public decimals = 18; //18 is the most used value
     uint public override totalSupply;
 
     address public founder;
@@ -36,7 +36,7 @@ contract ManualToken is ERC20Interface{
     mapping (address => uint) public balances;
     mapping (address => mapping(address => uint)) allowed;
 
-    constructor(){
+    constructor(){ 
         totalSupply = 1000000;
         founder = msg.sender;
         balances[founder] = totalSupply; //So basically at the start only the founder will own all the tokens
