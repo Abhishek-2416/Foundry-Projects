@@ -5,7 +5,7 @@ import {Script} from "forge-std/Script.sol";
 import {ManualToken} from "../src/ManualToken.sol";
 
 contract DeployManualToken is Script{
-    function run() external returns(ManualToken){
+    function run() external {
         string memory rpcUrl = vm.envString("RPC_URL");
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
 
@@ -14,7 +14,5 @@ contract DeployManualToken is Script{
         vm.startBroadcast(privateKey);
         ManualToken token = new ManualToken();
         vm.stopBroadcast();
-
-        return token;
     }
 }
