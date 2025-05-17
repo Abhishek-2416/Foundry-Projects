@@ -10,8 +10,9 @@ contract DeployBasicNft is Script {
     function run() external returns(BasicNft) {
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         string memory rpcUrl = vm.envString("RPC_URL");
+        string memory fujiRpcUrl = vm.envString("FUJI_RPC_URL");
 
-        vm.createSelectFork(rpcUrl);
+        vm.createSelectFork(fujiRpcUrl);
 
         vm.startBroadcast(privateKey);
         basicNft = new BasicNft();
