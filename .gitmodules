@@ -7,3 +7,9 @@
 [submodule "02-Foundry-ERC20/lib/forge-std"]
 	path = 02-Foundry-ERC20/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "03-Foundry-ERC721/lib/forge-std"]
+	path = 03-Foundry-ERC721/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "03-Foundry-ERC721/lib/openzeppelin-contracts"]
+	path = 03-Foundry-ERC721/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
