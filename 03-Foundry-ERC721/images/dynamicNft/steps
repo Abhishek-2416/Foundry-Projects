@@ -1,0 +1,11 @@
+1. Encode the SVG into a base64 string
+
+2. Embed it as an on-chain NFT using the tokenURI() method
+
+Okay so when we were using the IPFS, so as we are not doing it on IPFS and we have to do it in a SVG
+and what we can do is we can take a SVG and we need to base64 encode it using "base64 -i Happy.svg"
+and then after we base64 encode this string right here we need to convert it to tokenURI
+by doing "data:image/svg+xml;base64,<base64-encoded SVG>"
+
+data:image/svg+xml;base64,
+PHN2ZyB2aWV3Qm94PSIwIDAgMjAwIDIwMCIgd2lkdGg9IjQwMCIgIGhlaWdodD0iNDAwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPgogIDxjaXJjbGUgY3g9IjEwMCIgY3k9IjEwMCIgZmlsbD0ieWVsbG93IiByPSI3OCIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIzIi8+CiAgPGcgY2xhc3M9ImV5ZXMiPgogICAgPGNpcmNsZSBjeD0iNzAiIGN5PSI4MiIgcj0iMTIiLz4KICAgIDxjaXJjbGUgY3g9IjEyNyIgY3k9IjgyIiByPSIxMiIvPgogIDwvZz4KICA8cGF0aCBkPSJtMTM2LjgxIDExNi41M2MuNjkgMjYuMTctNjQuMTEgNDItODEuNTItLjczIiBzdHlsZT0iZmlsbDpub25lOyBzdHJva2U6IGJsYWNrOyBzdHJva2Utd2lkdGg6IDM7Ii8+Cjwvc3ZnPg==
