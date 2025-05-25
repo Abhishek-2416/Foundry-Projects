@@ -29,6 +29,9 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__TokenAddressAndPriceFeedAddressShouldBeSameLength();
 
     //Variables
+    uint256 private constant LIQUIDATION_PRECISION = 100;
+    uint256 private constant LIQUIDATION_THRESHOLD = 50;
+
     mapping (address token => address priceFeed) private s_priceFeeds;
     mapping (address user => mapping ( address token => uint amount )) private s_userCollalteralDeposited;
     mapping (address user => uint256 amountDscMinted) private s_DSCMinted;
@@ -109,29 +112,40 @@ contract DSCEngine is ReentrancyGuard {
         collateralValueInUSD = getAccountCollateralValueInUsd(user);
     }
 
-    function getAccountCollateralValueInUsd(address user) public view returns(uint256 valueInUSD) {
+    function getAccountCollateralValueInUsd(address user) public view returns(uint256 totalCollateralValue) {
         //Loop through each collateral token and get the amount they have deposited and map it
         for (uint256 i = 0; i < s_collateralTokens.length; i++){
             address token =  s_collateralTokens[i];
             uint256 amount = s_userCollalteralDeposited[user][token];
+            totalCollateralValue += getUSDValue(token,amount);
         }
+
+        return totalCollateralValue;
     }
 
-    function getUSDValue(address tokenCollateralAddress, uint256 amount) external view returns(int){
+    function getUSDValue(address tokenCollateralAddress, uint256 amount) public view returns(uint256){
         (,int256 price,,,) = AggregatorV3Interface(s_priceFeeds[tokenCollateralAddress]).latestRoundData();
-        return price;
+        
+        // Chainlink price feeds return prices with 8 decimals (1e8).
+        // We multiply by 1e10 to scale it to 18 decimals (1e18), which matches the standard ERC20 token decimal format.
+        // This ensures consistent precision across the calculation when converting token amount to USD value.
+        // The formula is: (price * 1e10) * amount / 1e18, which maintains 18 decimal precision in the result.
+        return ((uint256(price) * 1e10) * amount) / 1e18;
     }
 
     /**
      * This returns how close to liquidation a user is
      * If a user goes below 1, they can get liquidated
      */
-    function _healthFactor() private view returns(uint256) {
-        //Total DSC minted
-        //Total Collateral value
+    function _healthFactor(address user) private view returns(uint256) {
+        //1. Total DSC minted
+        //2. Total Collateral value
+
+        (uint256 totalDSCMinted,uint256 totalCollateralValue) = _getAccountInformation(user);
     }
+
     function revertIfHealthFactorIsBroken(address user) internal view {
-        //Check Health Factor
-        //Revert if it isn't sufficent
+        //1. Check Health Factor
+        //2. Revert if it isn't sufficent
     } 
 }
