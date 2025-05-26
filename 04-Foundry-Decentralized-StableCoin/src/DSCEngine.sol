@@ -23,14 +23,18 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interf
  */
 contract DSCEngine is ReentrancyGuard {
     //Errors
+    error DSCEngine__MintFailed();
     error DSCEngine__TransferFailed();
     error DSCEngine__TokenIsNotAllowed();
     error DSCEngine__TheAmountShouldBeMoreThanZero();
+    error DSCEngine__BreaksHealthFactor(uint256 healthFactorValue);
     error DSCEngine__TokenAddressAndPriceFeedAddressShouldBeSameLength();
 
     //Variables
+    uint256 private constant LIQUIDATION_THRESHOLD = 50; //Indicates we need to be 200% collateralized
     uint256 private constant LIQUIDATION_PRECISION = 100;
-    uint256 private constant LIQUIDATION_THRESHOLD = 50;
+    uint256 private constant PRECISION = 1e18;
+    uint256 private constant MIN_HEALTH_FACTOR = 1e18;
 
     mapping (address token => address priceFeed) private s_priceFeeds;
     mapping (address user => mapping ( address token => uint amount )) private s_userCollalteralDeposited;
@@ -90,7 +94,13 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     function mintDSC(uint256 amountDscToMint) external moreThanZero(amountDscToMint) {
+        _revertIfHealthFactorIsBroken(msg.sender);
         s_DSCMinted[msg.sender] += amountDscToMint;
+        (bool success) = i_dsc.mint(msg.sender,amountDscToMint);
+
+        if(!success){
+            revert DSCEngine__MintFailed();
+        }
     }
 
     function depositCollateralAndMintDSC() external {}
@@ -137,15 +147,40 @@ contract DSCEngine is ReentrancyGuard {
      * This returns how close to liquidation a user is
      * If a user goes below 1, they can get liquidated
      */
-    function _healthFactor(address user) private view returns(uint256) {
-        //1. Total DSC minted
-        //2. Total Collateral value
+    function _healthFactor(address user) private view returns (uint256) {
+    // 1. Get total DSC minted and total collateral value (in USD)
+    (uint256 totalDSCMinted, uint256 collateralValueInUSD) = _getAccountInformation(user);
+    return _calculateHealthFactor(totalDSCMinted, collateralValueInUSD);
+}
 
-        (uint256 totalDSCMinted,uint256 totalCollateralValue) = _getAccountInformation(user);
-    }
+function _calculateHealthFactor(
+    uint256 totalDSCMinted,
+    uint256 collateralValueInUSD
+) internal pure returns (uint256) {
+    /**
+     * Example:
+     * - Collateral value = $1000
+     * - LIQUIDATION_THRESHOLD = 50
+     * - Adjusted = ($1000 * 50) / 100 = $500
+     * - DSC minted = $400
+     * - Health Factor = $500 / $400 = 1.25 (safe)
+     */
+    if (totalDSCMinted == 0) return type(uint256).max;
 
-    function revertIfHealthFactorIsBroken(address user) internal view {
+    uint256 collateralAdjustedForThreshold =
+        (collateralValueInUSD * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
+
+    return (collateralAdjustedForThreshold * PRECISION) / totalDSCMinted;
+}
+ 
+
+    function _revertIfHealthFactorIsBroken(address user) internal view {
         //1. Check Health Factor
         //2. Revert if it isn't sufficent
+
+        uint256 userHealthFactor = _healthFactor(user);
+        if(userHealthFactor < MIN_HEALTH_FACTOR){
+            revert DSCEngine__BreaksHealthFactor(userHealthFactor);
+        }
     } 
 }
