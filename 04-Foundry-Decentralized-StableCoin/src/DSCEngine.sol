@@ -52,7 +52,7 @@ contract DSCEngine is ReentrancyGuard {
         if(amount == 0){
             revert DSCEngine__TheAmountShouldBeMoreThanZero();
         }
-        _;
+        _;  
     }
     
     // Checks if the token is allowed by verifying it has a registered price feed.
@@ -117,9 +117,14 @@ contract DSCEngine is ReentrancyGuard {
 
     //Private and Internal Functions
 
-    function _getAccountInformation(address user) private view returns(uint256 totalDscMinted,uint256 collateralValueInUSD){
-        totalDscMinted = s_DSCMinted[user];
-        collateralValueInUSD = getAccountCollateralValueInUsd(user);
+    function getUSDValue(address tokenCollateralAddress, uint256 amount) public view returns(uint256){
+        (,int256 price,,,) = AggregatorV3Interface(s_priceFeeds[tokenCollateralAddress]).latestRoundData();
+        
+        // Chainlink price feeds return prices with 8 decimals (1e8).
+        // We multiply by 1e10 to scale it to 18 decimals (1e18), which matches the standard ERC20 token decimal format.
+        // This ensures consistent precision across the calculation when converting token amount to USD value.
+        // The formula is: (price * 1e10) * amount / 1e18, which maintains 18 decimal precision in the result.
+        return ((uint256(price) * 1e10) * amount) / 1e18;
     }
 
     function getAccountCollateralValueInUsd(address user) public view returns(uint256 totalCollateralValue) {
@@ -133,27 +138,12 @@ contract DSCEngine is ReentrancyGuard {
         return totalCollateralValue;
     }
 
-    function getUSDValue(address tokenCollateralAddress, uint256 amount) public view returns(uint256){
-        (,int256 price,,,) = AggregatorV3Interface(s_priceFeeds[tokenCollateralAddress]).latestRoundData();
-        
-        // Chainlink price feeds return prices with 8 decimals (1e8).
-        // We multiply by 1e10 to scale it to 18 decimals (1e18), which matches the standard ERC20 token decimal format.
-        // This ensures consistent precision across the calculation when converting token amount to USD value.
-        // The formula is: (price * 1e10) * amount / 1e18, which maintains 18 decimal precision in the result.
-        return ((uint256(price) * 1e10) * amount) / 1e18;
+    function _getAccountInformation(address user) private view returns(uint256 totalDscMinted,uint256 collateralValueInUSD){
+        totalDscMinted = s_DSCMinted[user];
+        collateralValueInUSD = getAccountCollateralValueInUsd(user);
     }
 
-    /**
-     * This returns how close to liquidation a user is
-     * If a user goes below 1, they can get liquidated
-     */
-    function _healthFactor(address user) private view returns (uint256) {
-    // 1. Get total DSC minted and total collateral value (in USD)
-    (uint256 totalDSCMinted, uint256 collateralValueInUSD) = _getAccountInformation(user);
-    return _calculateHealthFactor(totalDSCMinted, collateralValueInUSD);
-}
-
-function _calculateHealthFactor(
+    function _calculateHealthFactor(
     uint256 totalDSCMinted,
     uint256 collateralValueInUSD
 ) internal pure returns (uint256) {
@@ -172,8 +162,16 @@ function _calculateHealthFactor(
 
     return (collateralAdjustedForThreshold * PRECISION) / totalDSCMinted;
 }
- 
 
+    /**
+     * This returns how close to liquidation a user is
+     * If a user goes below 1, they can get liquidated
+     */
+    function _healthFactor(address user) private view returns (uint256) {
+    // 1. Get total DSC minted and total collateral value (in USD)
+    (uint256 totalDSCMinted, uint256 collateralValueInUSD) = _getAccountInformation(user);
+    return _calculateHealthFactor(totalDSCMinted, collateralValueInUSD);
+}
     function _revertIfHealthFactorIsBroken(address user) internal view {
         //1. Check Health Factor
         //2. Revert if it isn't sufficent
@@ -182,5 +180,23 @@ function _calculateHealthFactor(
         if(userHealthFactor < MIN_HEALTH_FACTOR){
             revert DSCEngine__BreaksHealthFactor(userHealthFactor);
         }
-    } 
+    }
+
+
+    //Getter functions
+    function getUserCollateral(address user, address token) public view returns (uint256) {
+        return s_userCollalteralDeposited[user][token];
+    }
+
+    function getContractTokenBalance(address token) external view returns (uint256) {
+        return IERC20(token).balanceOf(address(this));
+    }
+
+    function getDSCMinted(address user) external view returns(uint256){
+        return s_DSCMinted[user];
+    }
+
+    function getAccountInformation(address user) external view returns(uint256 totalDscMinted,uint256 collateralValueInUS){
+        return _getAccountInformation(user);
+    }
 }
