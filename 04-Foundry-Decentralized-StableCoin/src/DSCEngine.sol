@@ -27,9 +27,9 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__TransferFailed();
     error DSCEngine__TokenIsNotAllowed();
     error DSCEngine__HealthFactorIsFine();
+    error DSCEngine__BreaksHealthFactor();
     error DSCEngine__HealthFactorNotImproved();
     error DSCEngine__TheAmountShouldBeMoreThanZero();
-    error DSCEngine__BreaksHealthFactor(uint256 healthFactorValue);
     error DSCEngine__TokenAddressAndPriceFeedAddressShouldBeSameLength();
 
     //Variables
@@ -99,8 +99,25 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     function mintDSC(uint256 amountDscToMint) public moreThanZero(amountDscToMint) {
+        //So before this it was allowing 1:1 minting and we basically dont want that else everyone will be liquidated lol
+
+        //Checking the old health factor
         _revertIfHealthFactorIsBroken(msg.sender);
+
+        uint256 newTotalDSC = s_DSCMinted[msg.sender] + amountDscToMint;
+
+        //Current value of the collateral
+        uint256 collateralValueInUSD = getAccountCollateralValueInUsd(msg.sender);
+
+        //This would be health factor after the mint
+        uint256 newHealthFactor = _calculateHealthFactor(newTotalDSC,collateralValueInUSD);
+
+        if(newHealthFactor < MIN_HEALTH_FACTOR){
+            revert DSCEngine__BreaksHealthFactor();
+        }
+
         s_DSCMinted[msg.sender] += amountDscToMint;
+
         (bool success) = i_dsc.mint(msg.sender,amountDscToMint);
 
         if(!success){
@@ -206,11 +223,7 @@ contract DSCEngine is ReentrancyGuard {
         _revertIfHealthFactorIsBroken(msg.sender);
     }
 
-    function getHealthFactor() external {}
-
-    //Private and Internal Functions
-
-    function getUSDValue(address tokenCollateralAddress, uint256 amount) public view returns(uint256){
+    function getUSDValue(address tokenCollateralAddress, uint256 amount) moreThanZero(amount) isAllowedToken(tokenCollateralAddress) public view returns(uint256){
         (,int256 price,,,) = AggregatorV3Interface(s_priceFeeds[tokenCollateralAddress]).latestRoundData();
         
         // Chainlink price feeds return prices with 8 decimals (1e8).
@@ -236,42 +249,39 @@ contract DSCEngine is ReentrancyGuard {
         collateralValueInUSD = getAccountCollateralValueInUsd(user);
     }
 
-    function _calculateHealthFactor(
-    uint256 totalDSCMinted,
-    uint256 collateralValueInUSD
-) internal pure returns (uint256) {
-    /**
-     * Example:
-     * - Collateral value = $1000
-     * - LIQUIDATION_THRESHOLD = 50
-     * - Adjusted = ($1000 * 50) / 100 = $500
-     * - DSC minted = $400
-     * - Health Factor = $500 / $400 = 1.25 (safe)
-     */
-    if (totalDSCMinted == 0) return type(uint256).max;
+    function _calculateHealthFactor(uint256 totalDSCMinted,uint256 collateralValueInUsd) public pure returns(uint256) {
+        /**
+         * Example:
+         * - Collateral value = $1000
+         * - LIQUIDATION_THRESHOLD = 50
+         * - Adjusted = ($1000 * 50) / 100 = $500
+         * - DSC minted = $400
+         * - Health Factor = $500 / $400 = 1.25 (safe)
+        */
+        if(totalDSCMinted == 0) return type(uint256).max;
 
-    uint256 collateralAdjustedForThreshold =
-        (collateralValueInUSD * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
-
-    return (collateralAdjustedForThreshold * PRECISION) / totalDSCMinted;
-}
+        uint256 collateralAdjustedForThreshold = (collateralValueInUsd * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
+        return (collateralAdjustedForThreshold * PRECISION) / totalDSCMinted;
+    }
 
     /**
      * This returns how close to liquidation a user is
      * If a user goes below 1, they can get liquidated
      */
-    function _healthFactor(address user) private view returns (uint256) {
+    function _healthFactor(address user) public view returns (uint256) {
     // 1. Get total DSC minted and total collateral value (in USD)
     (uint256 totalDSCMinted, uint256 collateralValueInUSD) = _getAccountInformation(user);
     return _calculateHealthFactor(totalDSCMinted, collateralValueInUSD);
-}
+    
+    }
+
     function _revertIfHealthFactorIsBroken(address user) internal view {
         //1. Check Health Factor
         //2. Revert if it isn't sufficent
 
         uint256 userHealthFactor = _healthFactor(user);
         if(userHealthFactor < MIN_HEALTH_FACTOR){
-            revert DSCEngine__BreaksHealthFactor(userHealthFactor);
+            revert DSCEngine__BreaksHealthFactor();
         }
     }
 
@@ -291,5 +301,15 @@ contract DSCEngine is ReentrancyGuard {
 
     function getAccountInformation(address user) external view returns(uint256 totalDscMinted,uint256 collateralValueInUS){
         return _getAccountInformation(user);
+    }
+
+    function mintDscOldWay(uint256 amountDscToMint) public moreThanZero(amountDscToMint) nonReentrant {
+        s_DSCMinted[msg.sender] += amountDscToMint;
+        _revertIfHealthFactorIsBroken(msg.sender);
+        bool minted = i_dsc.mint(msg.sender, amountDscToMint);
+
+        if (minted != true) {
+            revert DSCEngine__MintFailed();
+        }
     }
 }

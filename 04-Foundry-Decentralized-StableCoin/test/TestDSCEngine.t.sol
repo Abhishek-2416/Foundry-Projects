@@ -6,6 +6,7 @@ import {console} from "forge-std/console.sol";
 import {DSCEngine} from "../src/DSCEngine.sol";
 import {ERC20Mock} from "../test/mocks/ERC20Mock.sol";
 import {MockV3Aggregator} from "../test/mocks/MockV3Aggregator.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {DecentralizedStableCoin} from "../src/DecentralizedStableCoin.sol";
 
 contract TestDSCEngine is Test {
@@ -17,8 +18,8 @@ contract TestDSCEngine is Test {
     //Events
     event CollateralDeposited(address indexed user,address indexed tokenAddress, uint256 indexed amount);
 
-    address[] tokens = new address[](1);
-    address[] priceFeeds = new address[](1);
+    address[] public tokens;
+    address[] public priceFeeds;
 
     int256 private constant STARTING_PRICE = 2000e8;
     uint256 private constant TRANSFER_AMOUNT = 10e18;
@@ -33,8 +34,8 @@ contract TestDSCEngine is Test {
 
         dsc = new DecentralizedStableCoin();
 
-        tokens[0] = address(weth);
-        priceFeeds[0] = address(wethUsdPriceFeed);
+        tokens.push(address(weth));
+        priceFeeds.push(address(wethUsdPriceFeed));
 
         engine = new DSCEngine(tokens,priceFeeds,address(dsc));
 
@@ -46,106 +47,213 @@ contract TestDSCEngine is Test {
         weth.approve(address(engine),100e18);
     }
 
-    // address private WETH_ADDRESS = address(weth); Still not getting why WETh_ADdress is returning 0x00
+    //Constructor Tests
+    function testItRevertsWhenTheLengthOfAddressArraysIsNotEqual() public {
+        tokens.push(alice);
+        vm.expectRevert(DSCEngine.DSCEngine__TokenAddressAndPriceFeedAddressShouldBeSameLength.selector);
+        new DSCEngine(tokens,priceFeeds,address(dsc));
+    }
 
-    //Deposit Collateral
-    function testDepositCollateralAmountShallBeGreaterThanZero() external{
+    //(Modifiers)
+    function testTheDepositAmountCannotBeZero() external {
         vm.prank(bob);
-        vm.expectRevert();
+        vm.expectRevert(DSCEngine.DSCEngine__TheAmountShouldBeMoreThanZero.selector);
         engine.depositCollateral(address(weth),0);
     }
 
-    function testWhenOtherNonAllowedCollateralIsDeposited() external {
+    function testCannotDepositUnVerifiedToken() external {
         vm.prank(bob);
-        vm.expectRevert();
-        engine.depositCollateral(address(0),TRANSFER_AMOUNT);
+        vm.expectRevert(DSCEngine.DSCEngine__TokenIsNotAllowed.selector);
+        engine.depositCollateral(alice,TRANSFER_AMOUNT);
     }
 
-    function testTheDepositedCollateralGetsUpdated() external {
+    function testTheCollateralDepositedGetsUpdated() external {
+        assertEq(engine.getUserCollateral(bob,address(weth)),0);
         vm.prank(bob);
         engine.depositCollateral(address(weth),TRANSFER_AMOUNT);
-
-        assertEq(engine.getUserCollateral(bob, address(weth)), TRANSFER_AMOUNT);
+        assertEq(engine.getUserCollateral(bob,address(weth)),TRANSFER_AMOUNT);
     }
 
-    function testTheDepositCollateralEmitsEventOnDeposit() external {
+    function testEventEmitedWhenCollateralIsDeposited() external {
         vm.prank(bob);
         vm.expectEmit();
+
         emit CollateralDeposited(bob,address(weth),TRANSFER_AMOUNT);
+
         engine.depositCollateral(address(weth),TRANSFER_AMOUNT);
     }
 
-    function testTheEngineContractReceivesCollateralWhenDepositedByUser() external {
+    function testTheUserBalanceReducesAfterDeposit() external {
+        assertEq((weth).balanceOf(bob),100 ether);
+
         vm.prank(bob);
         engine.depositCollateral(address(weth),TRANSFER_AMOUNT);
 
-        assertEq(engine.getContractTokenBalance(address(weth)),TRANSFER_AMOUNT);
+        assertEq((weth).balanceOf(bob),90 ether);
     }
 
-    //MintDSC
+    function testTheCollateralTokenGetsTransferedToTheEngine() external {
+        assertEq((weth).balanceOf(address(engine)),0);
 
-    modifier BaseConditionForMintDSC() {
+        vm.prank(bob);
+        engine.depositCollateral(address(weth),TRANSFER_AMOUNT);
+
+        assertEq((weth).balanceOf(address(engine)),TRANSFER_AMOUNT);
+    }
+
+    function testThatDepositCollateralRevertsWhenTransferFails() external {
+        //we need exact calldata for that function call
+        /**
+         * So vm.mockCall basically helps us to manipulate the output we make to an external call
+         * "Hey, next time I call out to this contract with this exact data, don’t actually run it—just give me this fake result instead.
+         */
+        bytes memory callData = abi.encodeWithSelector(IERC20.transferFrom.selector,bob,address(engine),TRANSFER_AMOUNT);
+        vm.mockCall(address(weth),callData,abi.encode(false));
+
+        vm.prank(bob);
+        vm.expectRevert(DSCEngine.DSCEngine__TransferFailed.selector);
+        engine.depositCollateral(address(weth),TRANSFER_AMOUNT);
+    }
+
+    //Modifier Deposit Collateral
+    modifier depositCollateral {
         vm.prank(bob);
         engine.depositCollateral(address(weth),TRANSFER_AMOUNT);
         _;
     }
 
-    function testCannotMintDSCIfAmountIsZero() external BaseConditionForMintDSC {
+    //MintDSC
+    function testCannotMintMoreDSCIfHealthFactorIsBroken() depositCollateral external {
         vm.prank(bob);
-        vm.expectRevert();
-        engine.mintDSC(0);
+        engine.mintDSC(1000e18);
+
+        //Breaking the health factor now
+        wethUsdPriceFeed.updateAnswer(1e8);
+
+        vm.prank(bob);
+        vm.expectRevert(DSCEngine.DSCEngine__BreaksHealthFactor.selector);
+        engine.mintDSC(100e18);
     }
 
-    function testDSCMintedBalanceIncreases() external BaseConditionForMintDSC{
+    function testMintFailsIfNewAmountBreaksHealthFactor() depositCollateral external {
+        vm.prank(bob);
+        engine.mintDSC(1000e18);
+
+        vm.prank(bob);
+        vm.expectRevert(DSCEngine.DSCEngine__BreaksHealthFactor.selector);
+        engine.mintDSC(10000e18);
+    }
+
+    function testTheDSCMintedUpdates() depositCollateral external {
         assertEq(engine.getDSCMinted(bob),0);
 
         vm.prank(bob);
-        engine.mintDSC(TRANSFER_AMOUNT);
+        engine.mintDSC(1000e18);
 
-        assertEq(engine.getDSCMinted(bob),TRANSFER_AMOUNT);
+        assertEq(engine.getDSCMinted(bob),1000e18);
     }
 
-    function testUserDSCBalance() external BaseConditionForMintDSC {
-        assertEq(dsc.balanceOf(bob),0 ether);
+    function testWhenDSCMintedTheUserBalanceIncreases() depositCollateral external {
+        assertEq(dsc.balanceOf(bob),0);
 
         vm.prank(bob);
-        engine.mintDSC(TRANSFER_AMOUNT);
+        engine.mintDSC(1000e18);
 
-        assertEq(dsc.balanceOf(bob),TRANSFER_AMOUNT);
+        assertEq(dsc.balanceOf(bob),1000e18);
     }
+
+    function testItRevertsWhenMintFails() depositCollateral external {
+        bytes memory callData = abi.encodeWithSelector(dsc.mint.selector,bob,TRANSFER_AMOUNT);
+        vm.mockCall(address(dsc),callData,abi.encode(false));
+
+        vm.prank(bob);
+        vm.expectRevert(DSCEngine.DSCEngine__MintFailed.selector);
+        engine.mintDSC(TRANSFER_AMOUNT);
+    }
+    
 
     //Support Functions
-    function testGetUSDValue() external view{
-        uint256 ethAmount = 15e18;
-        uint256 expectedUSD = 30000e18;
-        uint256 actualUSD = engine.getUSDValue(address(weth),ethAmount);
 
-        assertEq(expectedUSD,actualUSD);
+    //Get USD value
+    function testGetUSDValue() external view {
+        uint256 actualUSDPrice = engine.getUSDValue(address(weth),TRANSFER_AMOUNT);
+
+        /**
+         * So we have weth at price 2000e8 we get from V3 Aggegrator 
+         * Here amount is 10e18
+         * So (2000e8 * 1e10) * (10e18) / 10e18
+         */
+        uint256 expectedUSDPrice = 20000e18;
+        assertEq(actualUSDPrice,expectedUSDPrice);
     }
 
-    function testAccountCollateralValueInUSD() external {
-        vm.prank(bob);
-        engine.depositCollateral(address(weth),TRANSFER_AMOUNT);
+    // Get Account Collateral Value In USD
+    function testGetTheTotalCollateralValueInUSD() depositCollateral external {
+        uint256 expectedAccountValue = 20000e18;
+        uint256 actualAccountValue = engine.getAccountCollateralValueInUsd(bob);
+        assertEq(expectedAccountValue,actualAccountValue);
 
-        uint256 expectedAccountCollateralValue = 20000e18;
-        uint256 actualAccountCollateralValue = engine.getAccountCollateralValueInUsd(bob);
-        assertEq(expectedAccountCollateralValue,actualAccountCollateralValue);
     }
 
-    function testGetTheAccountInformation() external {
+    //Get Account Information
+    function testGetTheAccountInformation() depositCollateral external {
         vm.prank(bob);
-        engine.depositCollateral(address(weth),TRANSFER_AMOUNT);
+        engine.mintDSC(TRANSFER_AMOUNT);
 
-        uint256 expectedTotalDSCMinted = 0;
+        uint256 expectedTotalDSCMinted = 10e18;
         uint256 expectedcollateralValueInUSD = 20000e18;
 
-        (uint256 actualTotalDSCMinted, uint256 actualcollateralValueInUsd) = engine.getAccountInformation(bob);
+        (uint256 actualTotalDSCMinted,uint256 actualcollateralValueInUSD) = engine.getAccountInformation(bob);
 
-        assertEq(expectedcollateralValueInUSD,actualcollateralValueInUsd);
         assertEq(expectedTotalDSCMinted,actualTotalDSCMinted);
+        assertEq(actualcollateralValueInUSD,actualcollateralValueInUSD);
+    }
+    
+    //Calculate Heath Factor
+    function testCalculateHealthFactorWhenNoDSCMinted() depositCollateral external{
+        uint256 expectedHealthFactor = type(uint256).max;
+        uint256 actualHealthFactor = engine._calculateHealthFactor(0,uint256 (STARTING_PRICE));
+        assertEq(expectedHealthFactor,actualHealthFactor);
     }
 
-    function testCalculateHealthFactor() external {
+    function testTheCalculateHealthFactorFunction() depositCollateral external {
+        vm.prank(bob);
+        engine.mintDSC(TRANSFER_AMOUNT);
+
+        /**
+         * Let say we have deposited 10 ether 
+         * Current price is $2000
+         * So makes our collateral to be valued at $20k
+         * Now we have just minted $10 DSC
+         * We have buffer of $10k i.e 50%
+         * so 10,000 * 1e18 / 10
+         */
+
+        uint256 totalDSCMinted = engine.getDSCMinted(bob);
+        uint256 totalCollateralValue = engine.getAccountCollateralValueInUsd(bob);
+
+        uint256 actualHealthFactor = engine._calculateHealthFactor(totalDSCMinted,totalCollateralValue);
+        uint256 expectedHealthFactor = 1e21;
+
+        assertEq(actualHealthFactor,expectedHealthFactor);
+    }
+
+    //_healthFactor
+    function testGetHealthFactor() depositCollateral external {
+        vm.prank(bob);
+        engine.mintDSC(TRANSFER_AMOUNT);
+
+
+
+
 
     }
+
+    // Revert If Health factor is Broken
+    function testFunctionRevertsIfHealthFactorIsBroken() depositCollateral external {
+        vm.prank(bob);
+        vm.expectRevert(DSCEngine.DSCEngine__BreaksHealthFactor.selector);
+        engine.mintDSC(10001e18);
+    }
+
 }
