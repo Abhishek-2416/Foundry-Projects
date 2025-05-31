@@ -26,6 +26,7 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__MintFailed();
     error DSCEngine__TransferFailed();
     error DSCEngine__TokenIsNotAllowed();
+    error DSCEngine__InsufficentBalance();
     error DSCEngine__HealthFactorIsFine();
     error DSCEngine__BreaksHealthFactor();
     error DSCEngine__HealthFactorNotImproved();
@@ -41,7 +42,7 @@ contract DSCEngine is ReentrancyGuard {
     uint256 private constant MIN_HEALTH_FACTOR = 1e18;
 
     mapping (address token => address priceFeed) private s_priceFeeds;
-    mapping (address user => mapping ( address token => uint amount )) private s_userCollalteralDeposited;
+    mapping (address user => mapping ( address token => uint amount )) private  s_userCollalteralDeposited;
     mapping (address user => uint256 amountDscMinted) private s_DSCMinted;
 
     address[] private s_collateralTokens;
@@ -145,6 +146,10 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     function _redeemCollateral(address from,address to,address tokenCollateralAddress, uint256 amountCollateral) private moreThanZero(amountCollateral) isAllowedToken(tokenCollateralAddress) {
+        if (s_userCollalteralDeposited[from][tokenCollateralAddress] < amountCollateral) {
+            revert DSCEngine__InsufficentBalance();
+        }
+
         s_userCollalteralDeposited[from][tokenCollateralAddress] -= amountCollateral;
         emit CollateralRedeemed(from,to,tokenCollateralAddress,amountCollateral);
 
@@ -159,7 +164,10 @@ contract DSCEngine is ReentrancyGuard {
     // 1. Their health factor should be greater than 1 AFTER THE COLLATERAL IS PULLED
     function redeemCollateral(address tokenCollateralAddress, uint256 amountCollateral) public moreThanZero(amountCollateral) nonReentrant{
         _redeemCollateral(msg.sender,msg.sender,tokenCollateralAddress,amountCollateral);
-        _revertIfHealthFactorIsBroken(msg.sender);
+        // 🚨 Only check health factor if they have DSC minted
+        if (s_DSCMinted[msg.sender] > 0) {
+            _revertIfHealthFactorIsBroken(msg.sender);
+        }
     }
 
     /**

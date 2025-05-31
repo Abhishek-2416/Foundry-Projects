@@ -17,6 +17,7 @@ contract TestDSCEngine is Test {
 
     //Events
     event CollateralDeposited(address indexed user,address indexed tokenAddress, uint256 indexed amount);
+    event CollateralRedeemed(address indexed redeemedFrom, address indexed redeemTo, address indexed token, uint256 amount);
 
     address[] public tokens;
     address[] public priceFeeds;
@@ -43,7 +44,12 @@ contract TestDSCEngine is Test {
         dsc.transferOwnership(address(engine));
 
         weth.mint(bob,100e18);
+        weth.mint(alice,100e18);
+
         vm.prank(bob);
+        weth.approve(address(engine),100e18);
+
+        vm.prank(alice);
         weth.approve(address(engine),100e18);
     }
 
@@ -170,7 +176,117 @@ contract TestDSCEngine is Test {
         vm.expectRevert(DSCEngine.DSCEngine__MintFailed.selector);
         engine.mintDSC(TRANSFER_AMOUNT);
     }
+
+    // Deposit Collateral and Mint DSC
+    function testDepositCollateralAndMintDSCWorks() external {
+        vm.prank(bob);
+        engine.depositCollateralAndMintDSC(address(weth),TRANSFER_AMOUNT,TRANSFER_AMOUNT);
+
+        assertEq(engine.getUserCollateral(bob,address(weth)),TRANSFER_AMOUNT);
+        assertEq(engine.getDSCMinted(bob),TRANSFER_AMOUNT);   
+    }
+
+    modifier depositCollateralAndMintDSC {
+        vm.prank(bob);
+        engine.depositCollateralAndMintDSC(address(weth),TRANSFER_AMOUNT,TRANSFER_AMOUNT);
+        _;
+    }
+
+    //Burn DSC
+    function testTheDSCMintedGetsUpdatedWhenBurnt() depositCollateralAndMintDSC external {
+        assertEq(engine.getDSCMinted(bob),TRANSFER_AMOUNT);
+
+        vm.prank(bob);
+        engine.burnDSC(TRANSFER_AMOUNT);
+
+        assertEq(engine.getDSCMinted(bob),0);
+    }
+
+    function testTheDSCGetBurned() depositCollateralAndMintDSC external {
+        assertEq((IERC20(dsc).balanceOf(bob)),TRANSFER_AMOUNT);
+
+        vm.prank(bob);
+        engine.burnDSC(TRANSFER_AMOUNT);
+
+        assertEq((IERC20(dsc).balanceOf(bob)),0);
+    }
+
+    //Redeem Collateral 
+    function testCannotRedeemMoreThanWhatDeposited() depositCollateral external {
+        vm.prank(bob);
+        vm.expectRevert(DSCEngine.DSCEngine__InsufficentBalance.selector);
+        engine.redeemCollateral(address(weth),100e18);
+    }
+
+    function testTheUserCollateralGetUpdatedWhenRedeemCollateral() depositCollateral external {
+        console.log(TRANSFER_AMOUNT);
+
+        vm.prank(bob);
+        engine.redeemCollateral(address(weth),TRANSFER_AMOUNT);
+
+        assertEq(engine.getUserCollateral(bob,address(weth)),0);
+    }
+
+    function testAnEventIsEmitedWhenCollateralIsRedeemed() depositCollateral external {
+        vm.prank(bob);
+        vm.expectEmit();
+
+        emit CollateralRedeemed(bob,bob,address(weth),TRANSFER_AMOUNT);
+
+        engine.redeemCollateral(address(weth),TRANSFER_AMOUNT);
+    }
     
+    function testTheCollateralTokensAreTransferedToUser() depositCollateral external {
+        assertEq(IERC20(address(weth)).balanceOf(bob),90e18);
+
+        vm.prank(bob);
+        engine.redeemCollateral(address(weth),TRANSFER_AMOUNT);
+
+        assertEq(IERC20(address(weth)).balanceOf(bob),100e18);        
+    }
+
+    function testRedeemCollateralFailsIfTransferToUserFails() depositCollateral external {
+        bytes memory callData = abi.encodeWithSelector(IERC20.transfer.selector,bob,TRANSFER_AMOUNT);
+        vm.mockCall(address(weth),callData,abi.encode(false));
+
+        vm.prank(bob);
+        vm.expectRevert(DSCEngine.DSCEngine__TransferFailed.selector);
+        engine.redeemCollateral(address(weth),TRANSFER_AMOUNT);
+    }
+
+    function testCannotRedeemCollateralIfITBreaksHealthFactor() depositCollateral external {
+        // Deposited $20k DSC minted $5k, threshold $10k
+        vm.prank(bob);
+        engine.mintDSC(5000e18);
+
+        vm.prank(bob);
+        vm.expectRevert(DSCEngine.DSCEngine__BreaksHealthFactor.selector);
+        engine.redeemCollateral(address(weth),6e18);
+    }
+
+    //Redeem Collateral For DSC
+    function testCanRedeemCollateralByGivingOutDSC() depositCollateral external {
+        vm.prank(bob);
+        engine.mintDSC(5000e18);
+
+        vm.prank(bob);
+        engine.redeemCollateralForDSC(address(weth),6e18,4000e18);
+    }
+
+    //Liquidate
+    /**
+     * So here we are testing this scenario
+     * Bob: Deposited 10 ETH == $20k then  
+     *      mints 10 DSC == $1
+     *      Now 1ETH = $1 so threshold is 50% , bob can get Liquidated
+     * 
+     * Alice Deposits
+     */
+    function testCannotLiquidateUserIfItsHealthFactorIsFine() depositCollateralAndMintDSC external {
+        vm.prank(alice);
+        vm.expectRevert(DSCEngine.DSCEngine__HealthFactorIsFine.selector);
+        engine.liquidate(address(weth),bob,TRANSFER_AMOUNT);
+    }
 
     //Support Functions
 
