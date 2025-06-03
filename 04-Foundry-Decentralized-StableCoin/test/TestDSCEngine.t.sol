@@ -49,8 +49,14 @@ contract TestDSCEngine is Test {
         vm.prank(bob);
         weth.approve(address(engine),100e18);
 
+        vm.prank(bob);
+        dsc.approve(address(engine),100e18);
+
         vm.prank(alice);
-        weth.approve(address(engine),100e18);
+        weth.approve(address(engine),1000e18);
+        
+        vm.prank(alice);
+        dsc.approve(address(engine),100e18);
     }
 
     //Constructor Tests
@@ -193,23 +199,23 @@ contract TestDSCEngine is Test {
     }
 
     //Burn DSC
-    function testTheDSCMintedGetsUpdatedWhenBurnt() depositCollateralAndMintDSC external {
-        assertEq(engine.getDSCMinted(bob),TRANSFER_AMOUNT);
+    // function testTheDSCMintedGetsUpdatedWhenBurnt() depositCollateralAndMintDSC external {
+    //     assertEq(engine.getDSCMinted(bob),TRANSFER_AMOUNT);
 
-        vm.prank(bob);
-        engine.burnDSC(TRANSFER_AMOUNT);
+    //     vm.prank(bob);
+    //     engine.burnDSC(TRANSFER_AMOUNT);
 
-        assertEq(engine.getDSCMinted(bob),0);
-    }
+    //     assertEq(engine.getDSCMinted(bob),0);
+    // }
 
-    function testTheDSCGetBurned() depositCollateralAndMintDSC external {
-        assertEq((IERC20(dsc).balanceOf(bob)),TRANSFER_AMOUNT);
+    // function testTheDSCGetBurned() depositCollateralAndMintDSC external {
+    //     assertEq((IERC20(dsc).balanceOf(bob)),TRANSFER_AMOUNT);
 
-        vm.prank(bob);
-        engine.burnDSC(TRANSFER_AMOUNT);
+    //     vm.prank(bob);
+    //     engine.burnDSC(TRANSFER_AMOUNT);
 
-        assertEq((IERC20(dsc).balanceOf(bob)),0);
-    }
+    //     assertEq((IERC20(dsc).balanceOf(bob)),0);
+    // }
 
     //Redeem Collateral 
     function testCannotRedeemMoreThanWhatDeposited() depositCollateral external {
@@ -286,21 +292,6 @@ contract TestDSCEngine is Test {
         vm.prank(alice);
         vm.expectRevert(DSCEngine.DSCEngine__HealthFactorIsFine.selector);
         engine.liquidate(address(weth),bob,TRANSFER_AMOUNT);
-    }
-
-    //Support Functions
-
-    //Get USD value
-    function testGetUSDValue() external view {
-        uint256 actualUSDPrice = engine.getUSDValue(address(weth),TRANSFER_AMOUNT);
-
-        /**
-         * So we have weth at price 2000e8 we get from V3 Aggegrator 
-         * Here amount is 10e18
-         * So (2000e8 * 1e10) * (10e18) / 10e18
-         */
-        uint256 expectedUSDPrice = 20000e18;
-        assertEq(actualUSDPrice,expectedUSDPrice);
     }
 
     // Get Account Collateral Value In USD

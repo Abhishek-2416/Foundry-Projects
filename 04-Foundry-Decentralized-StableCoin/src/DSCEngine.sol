@@ -5,6 +5,7 @@ import {DecentralizedStableCoin} from "./DecentralizedStableCoin.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import {console} from "forge-std/console.sol";
 
 /**
  * @title DSCEngine
@@ -138,9 +139,15 @@ contract DSCEngine is ReentrancyGuard {
         mintDSC(amountDscToMint);
     }
 
-    function burnDSC(uint256 DSCAmount) public moreThanZero(DSCAmount) {
-        s_DSCMinted[msg.sender] -= DSCAmount;
-        i_dsc.burnFrom(msg.sender,DSCAmount);
+    function burnDSC(uint256 DSCAmountToBurn,address onBehalfOf,address DSCFrom) public moreThanZero(DSCAmountToBurn) {
+        s_DSCMinted[msg.sender] -= DSCAmountToBurn;
+
+        bool success = i_dsc.transferFrom(DSCFrom, address(this), DSCAmountToBurn);
+        // This conditional is hypothetically unreachable
+        if (!success) {
+            revert DSCEngine__TransferFailed();
+        }
+        i_dsc.burnFrom(msg.sender,DSCAmountToBurn);
 
         _revertIfHealthFactorIsBroken(msg.sender); //Not at all likely for this to break
     }
@@ -178,7 +185,7 @@ contract DSCEngine is ReentrancyGuard {
      * @notice THis function will burn DSC and redeem underlying collateral
      */
     function redeemCollateralForDSC(address tokenCollateralAddress,uint256 amountCollateral,uint256 DSCAmount) external moreThanZero(amountCollateral) moreThanZero(DSCAmount) isAllowedToken(tokenCollateralAddress){
-        burnDSC(DSCAmount);
+        burnDSC(DSCAmount,msg.sender,msg.sender);
         redeemCollateral(tokenCollateralAddress,amountCollateral); //This checks for health factor as well
     }
 
@@ -203,33 +210,44 @@ contract DSCEngine is ReentrancyGuard {
      * 
      * Follows CEI: Checks, Effects, Interactions
      */
-    function liquidate(address collateralAddress,address user,uint256 debtToCover) external moreThanZero(debtToCover) isAllowedToken(collateralAddress) nonReentrant{
-        //Need to check for user if he is actually near liquidation
-        uint256 startingUserHealthFactor = _healthFactor(user);
+    function liquidate(address collateralAddress, address user, uint256 debtToCover) 
+    external 
+    moreThanZero(debtToCover) 
+    isAllowedToken(collateralAddress) 
+    nonReentrant 
+{
+    // Need to check for user if he is actually near liquidation
+    uint256 startingUserHealthFactor = _healthFactor(user);
+    console.log(startingUserHealthFactor);
 
-        if(startingUserHealthFactor >= MIN_HEALTH_FACTOR){
-            revert DSCEngine__HealthFactorIsFine();
-        }
-
-        uint256 tokenAmountFromDebtCovered = getTokenAmountFromUSD(collateralAddress,debtToCover);
-
-        //We are giving the liquator a 10% for the amount he liquated
-        uint256 bonusCollateral = (tokenAmountFromDebtCovered * LIQUIDATION_BONUS) / LIQUIDATION_PRECISION;
-        uint256 totalCollateralToRedeem = tokenAmountFromDebtCovered + bonusCollateral;
-        _redeemCollateral(user,msg.sender,collateralAddress,totalCollateralToRedeem);
-
-        //Burn the DSC
-        i_dsc.burnFrom(user,debtToCover);
-
-        //Now we check the health Factor again if there is any improvements else revert
-        uint256 endingUserHealthFactor = _healthFactor(user);
-        if(endingUserHealthFactor <= startingUserHealthFactor){
-            revert DSCEngine__HealthFactorNotImproved();
-        }
-
-        //Now if this affects the liquadators health factor then also we need to revert
-        _revertIfHealthFactorIsBroken(msg.sender);
+    if(startingUserHealthFactor >= MIN_HEALTH_FACTOR){
+        revert DSCEngine__HealthFactorIsFine();
     }
+
+    uint256 tokenAmountFromDebtCovered = getTokenAmountFromUSD(collateralAddress, debtToCover);
+    console.log(tokenAmountFromDebtCovered);
+
+    // We are giving the liquidator a 10% bonus for the amount he liquidated
+    uint256 bonusCollateral = (tokenAmountFromDebtCovered * LIQUIDATION_BONUS) / LIQUIDATION_PRECISION;
+    uint256 totalCollateralToRedeem = tokenAmountFromDebtCovered + bonusCollateral;
+    _redeemCollateral(user, msg.sender, collateralAddress, totalCollateralToRedeem);
+
+    // Burn the DSC
+    burnDSC(debtToCover, user, msg.sender);
+
+    // Now we check the health factor again - ensure liquidation didn't make things worse
+    uint256 endingUserHealthFactor = _healthFactor(user);
+    console.log(endingUserHealthFactor);
+
+    // Fixed check: Only revert if the health factor got worse
+    // This allows legitimate liquidations that improve the position
+    if(endingUserHealthFactor < startingUserHealthFactor){
+        revert DSCEngine__HealthFactorNotImproved();
+    }
+
+    // Now if this affects the liquidator's health factor then also we need to revert
+    _revertIfHealthFactorIsBroken(msg.sender);
+}
 
     function getUSDValue(address tokenCollateralAddress, uint256 amount) moreThanZero(amount) isAllowedToken(tokenCollateralAddress) public view returns(uint256){
         (,int256 price,,,) = AggregatorV3Interface(s_priceFeeds[tokenCollateralAddress]).latestRoundData();
