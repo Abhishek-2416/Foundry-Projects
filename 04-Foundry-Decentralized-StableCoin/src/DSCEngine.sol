@@ -329,6 +329,10 @@ contract DSCEngine is ReentrancyGuard {
         return _getAccountInformation(user);
     }
 
+    function getCollateralTokens() external view returns(address[] memory){
+        return s_collateralTokens;
+    }
+
     function mintDscOldWay(uint256 amountDscToMint) public moreThanZero(amountDscToMint) nonReentrant {
         s_DSCMinted[msg.sender] += amountDscToMint;
         _revertIfHealthFactorIsBroken(msg.sender);
