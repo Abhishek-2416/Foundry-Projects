@@ -54,7 +54,21 @@ contract DSCEngine is ReentrancyGuard {
     event CollateralDeposited(address indexed user,address indexed tokenAddress, uint256 indexed amount);
     event CollateralRedeemed(address indexed redeemedFrom, address indexed redeemTo, address indexed token, uint256 amount);
 
-    //Modifiers
+    //External Functions
+    constructor(address[] memory tokenAddresses, address[] memory priceFeedAddress,address dscAddress) {
+        if(tokenAddresses.length != priceFeedAddress.length){
+            revert DSCEngine__TokenAddressAndPriceFeedAddressShouldBeSameLength();
+        }
+
+        for(uint256 i = 0; i < tokenAddresses.length; i++){
+            s_priceFeeds[tokenAddresses[i]] = priceFeedAddress[i];
+            s_collateralTokens.push(tokenAddresses[i]);
+        }
+
+        i_dsc = DecentralizedStableCoin(dscAddress);
+    }
+
+     //Modifiers
     modifier moreThanZero(uint256 amount){
         if(amount == 0){
             revert DSCEngine__TheAmountShouldBeMoreThanZero();
@@ -70,20 +84,6 @@ contract DSCEngine is ReentrancyGuard {
             revert DSCEngine__TokenIsNotAllowed();
         }
         _;
-    }
-
-    //External Functions
-    constructor(address[] memory tokenAddresses, address[] memory priceFeedAddress,address dscAddress) {
-        if(tokenAddresses.length != priceFeedAddress.length){
-            revert DSCEngine__TokenAddressAndPriceFeedAddressShouldBeSameLength();
-        }
-
-        for(uint256 i = 0; i < tokenAddresses.length; i++){
-            s_priceFeeds[tokenAddresses[i]] = priceFeedAddress[i];
-            s_collateralTokens.push(tokenAddresses[i]);
-        }
-
-        i_dsc = DecentralizedStableCoin(dscAddress);
     }
     
     /**
