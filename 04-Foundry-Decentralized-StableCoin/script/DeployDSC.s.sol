@@ -1,33 +1,32 @@
-// // SPDX-License-Identifier: MIT
-// pragma solidity ^0.8.20;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
 
-// import {Script} from "forge-std/Script.sol";
-// import {DSCEngine} from "../src/DSCEngine.sol";
-// import {HelperConfig} from "../script/HelperConfig.s.sol";
-// import {DecentralizedStableCoin} from "../src/DecentralizedStableCoin.sol";
+import {Script} from "forge-std/Script.sol";
+import {DSCEngine} from "../src/DSCEngine.sol";
+import {HelperConfig} from "../script/HelperConfig.s.sol";
+import {DecentralizedStableCoin} from "../src/DecentralizedStableCoin.sol";
 
-// contract DeployDSC is Script {
+contract DeployDSC is Script {
+    address[] public tokenAddresses;
+    address[] public priceFeedAddresses;
 
-//     struct DeployDSCNetworkConfig {
-//         address[] tokenAddresses;
-//         address[] priceFeedAddress;
-//         uint256 deployer;
-//     }
+    function run() external returns(DecentralizedStableCoin,DSCEngine){
+        string memory ANVIL_RPC_URL = vm.envString("ANVIL_RPC_URL");
 
-//     function run() external returns(DecentralizedStableCoin,DSCEngine){
-//         HelperConfig helperConfig = new HelperConfig();
-//         // DeployDSCNetworkConfig memory cfg = helperConfig.getActiveNetworkConfig();
+        HelperConfig helperConfig = new HelperConfig();
+        (address wethUsdPriceFeed, address wbtcUsdPriceFeed, address weth, address wbtc, uint256 deployerKey) = helperConfig.activeNetworkConfig();
 
-//         // address[] memory tokens  = cfg.tokenAddresses;
-//         // address[] memory priceFeed = cfg.priceFeedAddress;
-//         // uint256 deployerKey = cfg.deployer;
-        
+        //I think this is how we update arrays and not like how we do simply push
+        tokenAddresses = [weth,wbtc];
+        priceFeedAddresses = [wethUsdPriceFeed,wbtcUsdPriceFeed];
 
-//         vm.startBroadcast(deployerKey);
-//         DecentralizedStableCoin dsc = new DecentralizedStableCoin();
-//         DSCEngine engine = new DSCEngine(tokens,priceFeed,address(dsc)); 
-//         vm.stopBroadcast();
+        vm.createSelectFork(ANVIL_RPC_URL);
 
-//         return (dsc,engine);
-//     }
-// }
+        vm.startBroadcast(deployerKey);
+        DecentralizedStableCoin dsc = new DecentralizedStableCoin();
+        DSCEngine engine = new DSCEngine(tokenAddresses,priceFeedAddresses,address(dsc)); 
+        vm.stopBroadcast();
+
+        return (dsc,engine);
+    }
+}

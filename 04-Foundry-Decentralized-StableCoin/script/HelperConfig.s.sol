@@ -8,8 +8,10 @@ import {MockV3Aggregator} from "../test/mocks/MockV3Aggregator.sol";
 contract HelperConfig is Script {
     
     struct NetworkConfig {
-        address[] tokenAddresses;
-        address[] priceFeedAddress;
+        address weth;
+        address wbtc;
+        address wethUsdPriceFeed;
+        address wbtcUsdPriceFeed;
         uint256 deployer;
     }
 
@@ -28,25 +30,17 @@ contract HelperConfig is Script {
     }
 
     function getFujiConfig() public view returns(NetworkConfig memory fujiNetworkConfig){
-        address wethUsdPriceFeed = 0x86d67c3D38D2bCeE722E601025C25a575021c6EA;
-        address wbtcUsdPriceFeed = 0x31CF013A08c6Ac228C94551d535d5BAfE19c602a;
+        address _wethUsdPriceFeed = 0x86d67c3D38D2bCeE722E601025C25a575021c6EA;
+        address _wbtcUsdPriceFeed = 0x31CF013A08c6Ac228C94551d535d5BAfE19c602a;
 
-        address weth = 0x9668f5f55f2712Dd2dfa316256609b516292D554;
-        address wbtc = 0x5d870A421650C4f39aE3f5eCB10cBEEd36e6dF50;
-
-        address[] memory tokenAddresses = new address[](2);
-        address[] memory priceFeedAddress = new address[](2);
-
-        tokenAddresses[0] = weth;
-        tokenAddresses[1] = wbtc;
-
-        priceFeedAddress[0] = wethUsdPriceFeed;
-        priceFeedAddress[1] = wbtcUsdPriceFeed;
-
+        address _weth = 0x9668f5f55f2712Dd2dfa316256609b516292D554;
+        address _wbtc = 0x5d870A421650C4f39aE3f5eCB10cBEEd36e6dF50;
         
         fujiNetworkConfig = NetworkConfig({
-            tokenAddresses: tokenAddresses,
-            priceFeedAddress: priceFeedAddress,
+            weth: _weth,
+            wbtc: _wbtc,
+            wethUsdPriceFeed: _wethUsdPriceFeed,
+            wbtcUsdPriceFeed: _wbtcUsdPriceFeed,
             deployer: vm.envUint("FUJI_PRIVATE_KEY")
         });
 
@@ -54,7 +48,7 @@ contract HelperConfig is Script {
     }
 
     function getOrCreateAnvilConfig() public returns(NetworkConfig memory anvilNetworkConfig){
-        if(activeNetworkConfig.tokenAddresses.length != 0){
+        if(activeNetworkConfig.wethUsdPriceFeed != address(0)){
             return activeNetworkConfig;
         }
 
@@ -66,18 +60,11 @@ contract HelperConfig is Script {
         ERC20Mock wbtcMock = new ERC20Mock("Wrapped Bitcoin","WBTC",msg.sender,1000e8);
         vm.stopBroadcast();
 
-        address[] memory tokenAddresses = new address[](2);
-        address[] memory priceFeedAddress = new address[](2);
-
-        tokenAddresses[0] = address(wethMock);
-        tokenAddresses[1] = address(wbtcMock);
-
-        priceFeedAddress[0] = address(ethUsdPriceFeed);
-        priceFeedAddress[1] = address(btcUsdPriceFeed);
-
         anvilNetworkConfig = NetworkConfig({
-            tokenAddresses: tokenAddresses,
-            priceFeedAddress: priceFeedAddress,
+            weth: address(wethMock),
+            wbtc: address(wbtcMock),
+            wethUsdPriceFeed: address(ethUsdPriceFeed),
+            wbtcUsdPriceFeed: address(btcUsdPriceFeed),
             deployer: vm.envUint("ANVIL_PRIVATE_KEY")
         });
 
