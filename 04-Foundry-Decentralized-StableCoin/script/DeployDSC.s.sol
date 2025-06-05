@@ -11,16 +11,12 @@ contract DeployDSC is Script {
     address[] public priceFeedAddresses;
 
     function run() external returns(DecentralizedStableCoin,DSCEngine){
-        string memory ANVIL_RPC_URL = vm.envString("ANVIL_RPC_URL");
-
         HelperConfig helperConfig = new HelperConfig();
         (address wethUsdPriceFeed, address wbtcUsdPriceFeed, address weth, address wbtc, uint256 deployerKey) = helperConfig.activeNetworkConfig();
 
         //I think this is how we update arrays and not like how we do simply push
         tokenAddresses = [weth,wbtc];
         priceFeedAddresses = [wethUsdPriceFeed,wbtcUsdPriceFeed];
-
-        vm.createSelectFork(ANVIL_RPC_URL);
 
         vm.startBroadcast(deployerKey);
         DecentralizedStableCoin dsc = new DecentralizedStableCoin();
