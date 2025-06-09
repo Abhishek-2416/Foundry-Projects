@@ -56,9 +56,7 @@ contract DSCEngine is ReentrancyGuard {
 
     //Modifiers
     modifier moreThanZero(uint256 amount){
-        if(amount == 0){
-            revert DSCEngine__TheAmountShouldBeMoreThanZero();
-        }
+        require(amount > 0,DSCEngine__TheAmountShouldBeMoreThanZero());
         _;  
     }
     
@@ -135,7 +133,7 @@ contract DSCEngine is ReentrancyGuard {
      * your DSC but keep your collateral in.
      */
     function burnDSC(uint256 DSCAmountToBurn,address onBehalfOf,address DSCFrom) public moreThanZero(DSCAmountToBurn) {
-        s_DSCMinted[msg.sender] -= DSCAmountToBurn;
+        s_DSCMinted[onBehalfOf] -= DSCAmountToBurn;
 
         bool success = i_dsc.transferFrom(DSCFrom, address(this), DSCAmountToBurn);
         // This conditional is hypothetically unreachable
