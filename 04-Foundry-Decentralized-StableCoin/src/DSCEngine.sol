@@ -132,16 +132,19 @@ contract DSCEngine is ReentrancyGuard {
      * @dev you might want to use this if you're nervous you might get liquidated and want to just burn
      * your DSC but keep your collateral in.
      */
-    function burnDSC(uint256 DSCAmountToBurn,address onBehalfOf,address DSCFrom) public moreThanZero(DSCAmountToBurn) {
+    function _burnDSC(uint256 DSCAmountToBurn,address onBehalfOf,address from) private moreThanZero(DSCAmountToBurn) {
         s_DSCMinted[onBehalfOf] -= DSCAmountToBurn;
 
-        bool success = i_dsc.transferFrom(DSCFrom, address(this), DSCAmountToBurn);
+        bool success = i_dsc.transferFrom(from, address(this), DSCAmountToBurn);
         // This conditional is hypothetically unreachable
         if (!success) {
             revert DSCEngine__TransferFailed();
         }
-        i_dsc.burnFrom(msg.sender,DSCAmountToBurn);
+        i_dsc.burn(DSCAmountToBurn);
+    }
 
+    function burnDSC(uint256 amount) public moreThanZero(amount){
+        _burnDSC(amount,msg.sender,msg.sender);
         _revertIfHealthFactorIsBroken(msg.sender); //Not at all likely for this to break
     }
 
@@ -186,7 +189,7 @@ contract DSCEngine is ReentrancyGuard {
      * @notice THis function will burn DSC and redeem underlying collateral
      */
     function redeemCollateralForDSC(address tokenCollateralAddress,uint256 amountCollateral,uint256 DSCAmount) external moreThanZero(amountCollateral) moreThanZero(DSCAmount) isAllowedToken(tokenCollateralAddress){
-        burnDSC(DSCAmount,msg.sender,msg.sender);
+        _burnDSC(DSCAmount,msg.sender,msg.sender);
         _redeemCollateral(msg.sender,msg.sender,tokenCollateralAddress,amountCollateral);
         _revertIfHealthFactorIsBroken(msg.sender);
     }
@@ -236,7 +239,7 @@ contract DSCEngine is ReentrancyGuard {
     _redeemCollateral(user, msg.sender, collateralAddress, totalCollateralToRedeem);
 
     // Burn the DSC
-    burnDSC(debtToCover, user, msg.sender);
+    _burnDSC(debtToCover, user, msg.sender);
 
     // Now we check the health factor again - ensure liquidation didn't make things worse
     uint256 endingUserHealthFactor = _healthFactor(user);
@@ -253,7 +256,7 @@ contract DSCEngine is ReentrancyGuard {
 }
 
     //✅
-    function getUSDValue(address tokenCollateralAddress, uint256 amount) moreThanZero(amount) isAllowedToken(tokenCollateralAddress) public view returns(uint256){
+    function getUSDValue(address tokenCollateralAddress, uint256 amount) isAllowedToken(tokenCollateralAddress) public view returns(uint256){
         (,int256 price,,,) = AggregatorV3Interface(s_priceFeeds[tokenCollateralAddress]).latestRoundData();
         
         // Chainlink price feeds return prices with 8 decimals (1e8).

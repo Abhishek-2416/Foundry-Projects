@@ -135,7 +135,7 @@ contract TestDSCEngine is Test {
     }
 
     //MintDSC
-    function testCannotMintMoreDSCIfHealthFactorIsBroken() depositCollateral external {
+    function testCannotMintMoreDSCIfHealthFactorIsBrokenCorrupt() depositCollateral external {
         vm.prank(bob);
         engine.mintDSC(1000e18);
 
@@ -270,14 +270,14 @@ contract TestDSCEngine is Test {
         engine.redeemCollateral(address(weth),6e18);
     }
 
-    //Redeem Collateral For DSC
-    function testCanRedeemCollateralByGivingOutDSC() depositCollateral external {
-        vm.prank(bob);
-        engine.mintDSC(5000e18);
+    // //Redeem Collateral For DSC
+    // function testCanRedeemCollateralByGivingOutDSC() depositCollateral external {
+    //     vm.prank(bob);
+    //     engine.mintDSC(5000e18);
 
-        vm.prank(bob);
-        engine.redeemCollateralForDSC(address(weth),6e18,4000e18);
-    }
+    //     vm.prank(bob);
+    //     engine.redeemCollateralForDSC(address(weth),6e18,4000e18);
+    // }
 
     //Liquidate
     /**

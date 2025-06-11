@@ -76,7 +76,7 @@ contract TestDecentralizedStabelCoin is Test {
 
         vm.prank(Owner);
         vm.expectRevert();
-        stableCoin.burnFrom(bob,0);
+        stableCoin.burn(0);
     }
 
     function testCannotBurnMoreThanTheBalance() external {
@@ -91,10 +91,22 @@ contract TestDecentralizedStabelCoin is Test {
     function testTheOwnerBalanceDecreasesWhenTokensBurnt() external {
         vm.prank(Owner);
         stableCoin.mint(bob,MINT_AMOUNT);
+        console.log("Bob balance Before ",stableCoin.balanceOf(bob));
 
-        vm.prank(Owner);
-        stableCoin.burnFrom(bob, BURN_AMOUNT);
+        vm.prank(bob);
+        stableCoin.burn(BURN_AMOUNT);
 
         assertEq(stableCoin.balanceOf(bob), MINT_AMOUNT - BURN_AMOUNT);
+        console.log("Bob balance After",stableCoin.balanceOf(bob));
+    }
+
+    function testTheOwnerCanBurnTotalAmount() external {
+        vm.prank(Owner);
+        stableCoin.mint(bob,MINT_AMOUNT);
+
+        vm.prank(bob);
+        stableCoin.burn(MINT_AMOUNT);
+
+        assertEq(stableCoin.balanceOf(bob),0);
     }
 }

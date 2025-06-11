@@ -28,8 +28,9 @@ contract DecentralizedStableCoin is ERC20Burnable,Ownable {
         return true;
     }
 
-    function burnFrom(address _owner,uint256 _amount) public override onlyOwner{
-        uint256 balance = balanceOf(_owner);
+    //Removed OnlyOwner as it wasnt allowing bob to burn due to changes in OpenZepplein Ownable
+    function burn(uint256 _amount) public override{
+        uint256 balance = balanceOf(msg.sender);
 
         if(_amount <= 0){
             revert DecentralizedStableCoin__MustBeMoreThanZero();
@@ -41,6 +42,6 @@ contract DecentralizedStableCoin is ERC20Burnable,Ownable {
 
 
         //What this super keyword does is allows us to use a function directly from the parent's class
-        _burn(_owner,_amount); // <--- this bypasses the allowance check
+        super.burn(_amount); // <--- this bypasses the allowance check
     }
 }
