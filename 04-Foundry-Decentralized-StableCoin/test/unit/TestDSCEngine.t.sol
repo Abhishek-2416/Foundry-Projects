@@ -56,7 +56,13 @@ contract TestDSCEngine is Test {
         ERC20Mock(weth).mint(bob,APPROVAL_AMOUNT);
         ERC20Mock(weth).approve(address(engine),APPROVAL_AMOUNT);
         dsc.approve(address(engine),APPROVAL_AMOUNT);
-        vm.stopPrank();  
+        vm.stopPrank();
+
+        vm.startPrank(alice);
+        ERC20Mock(weth).mint(alice,APPROVAL_AMOUNT);
+        ERC20Mock(weth).approve(address(engine),APPROVAL_AMOUNT);
+        dsc.approve(address(engine),APPROVAL_AMOUNT);
+        vm.stopPrank();
 
         // wbtc = config.getActiveNetworkConfig().wbtc;
         // vm.startPrank(bob);
@@ -309,5 +315,25 @@ contract TestDSCEngine is Test {
 
         assertEq(engine.getDSCMinted(bob),0);
         assertEq(engine.getUserCollateral(bob,weth),0);
+    }
+
+    //Liquidate
+    function testCannotLiquidateIfUserHealthFactorIsOk() depositCollateralAndMintDSC external {
+        vm.prank(alice);
+        engine.depositCollateralAndMintDSC(weth,100 ether,1000e18);
+
+        vm.prank(alice);
+        vm.expectRevert(DSCEngine.DSCEngine__HealthFactorIsFine.selector);
+        engine.liquidate(weth,bob,AMOUNT_DSC_TO_MINT);
+    }
+
+    function testWHenLiqudateTheCollateralGoesToLiquidator() depositCollateralAndMintDSC external {
+        vm.prank(alice);
+        engine.depositCollateralAndMintDSC(weth,100 ether,10000e18);
+
+        MockV3Aggregator(wethUsdPriceFeed).updateAnswer(19e8);
+    
+        vm.prank(alice);
+        engine.liquidate(weth,bob,9e18);
     }
 }

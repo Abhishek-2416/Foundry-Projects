@@ -7,6 +7,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import {console} from "forge-std/console.sol";
 
+
 /**
  * @title DSCEngine
  * @author Abhishek Alimchandani
@@ -267,16 +268,21 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     //✅
-    function getAccountCollateralValueInUsd(address user) public view returns(uint256 totalCollateralValue) {
-        //Loop through each collateral token and get the amount they have deposited and map it
-        for (uint256 i = 0; i < s_collateralTokens.length; i++){
-            address token =  s_collateralTokens[i];
-            uint256 amount = s_userCollalteralDeposited[user][token];
-            totalCollateralValue += getUSDValue(token,amount);
+    function getAccountCollateralValueInUsd(address user)
+    public
+    view
+    returns (uint256 totalCollateralValue)
+{
+    for (uint256 i = 0; i < s_collateralTokens.length; i++) {
+        address token = s_collateralTokens[i];
+        uint256 amount = s_userCollalteralDeposited[user][token];
+        if (amount == 0) {
+            // skip any token with zero balance
+            continue;
         }
-
-        return totalCollateralValue;
+        totalCollateralValue += getUSDValue(token, amount);
     }
+}
 
     //✅
     function _getAccountInformation(address user) private view returns(uint256 totalDscMinted,uint256 collateralValueInUSD){
