@@ -237,6 +237,7 @@ contract DSCEngine is ReentrancyGuard {
     // We are giving the liquidator a 10% bonus for the amount he liquidated
     uint256 bonusCollateral = (tokenAmountFromDebtCovered * LIQUIDATION_BONUS) / LIQUIDATION_PRECISION;
     uint256 totalCollateralToRedeem = tokenAmountFromDebtCovered + bonusCollateral;
+    console.log(totalCollateralToRedeem);
     _redeemCollateral(user, msg.sender, collateralAddress, totalCollateralToRedeem);
 
     // Burn the DSC

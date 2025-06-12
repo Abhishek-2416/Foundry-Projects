@@ -331,10 +331,12 @@ contract TestDSCEngine is Test {
     //     vm.prank(alice);
     //     engine.depositCollateralAndMintDSC(weth,100 ether,10000e18);
 
-    //     MockV3Aggregator(wethUsdPriceFeed).updateAnswer(19e8);
+    //     console.log("Alice DSC Balance",IERC20(dsc).balanceOf(alice));
+
+    //     MockV3Aggregator(wethUsdPriceFeed).updateAnswer(20e8);
     
     //     vm.prank(alice);
-    //     engine.liquidate(weth,bob,9e18);
+    //     engine.liquidate(weth,bob,900e18);
     // }
 
     //Support Functions
