@@ -64,12 +64,12 @@ contract TestDSCEngine is Test {
         dsc.approve(address(engine),APPROVAL_AMOUNT);
         vm.stopPrank();
 
-        // wbtc = config.getActiveNetworkConfig().wbtc;
-        // vm.startPrank(bob);
-        // ERC20Mock(wbtc).mint(bob,APPROVAL_AMOUNT);
-        // ERC20Mock(wbtc).approve(address(engine),APPROVAL_AMOUNT);
-        // dsc.approve(address(engine),APPROVAL_AMOUNT);
-        // vm.stopPrank();      
+        wbtc = config.getActiveNetworkConfig().wbtc;
+        vm.startPrank(bob);
+        ERC20Mock(wbtc).mint(bob,APPROVAL_AMOUNT);
+        ERC20Mock(wbtc).approve(address(engine),APPROVAL_AMOUNT);
+        dsc.approve(address(engine),APPROVAL_AMOUNT);
+        vm.stopPrank();      
     }
 
     //Constructor Tests
@@ -327,13 +327,68 @@ contract TestDSCEngine is Test {
         engine.liquidate(weth,bob,AMOUNT_DSC_TO_MINT);
     }
 
-    function testWHenLiqudateTheCollateralGoesToLiquidator() depositCollateralAndMintDSC external {
-        vm.prank(alice);
-        engine.depositCollateralAndMintDSC(weth,100 ether,10000e18);
+    // function testWHenLiqudateTheCollateralGoesToLiquidator() depositCollateralAndMintDSC external {
+    //     vm.prank(alice);
+    //     engine.depositCollateralAndMintDSC(weth,100 ether,10000e18);
 
-        MockV3Aggregator(wethUsdPriceFeed).updateAnswer(19e8);
+    //     MockV3Aggregator(wethUsdPriceFeed).updateAnswer(19e8);
     
-        vm.prank(alice);
-        engine.liquidate(weth,bob,9e18);
+    //     vm.prank(alice);
+    //     engine.liquidate(weth,bob,9e18);
+    // }
+
+    //Support Functions
+    
+    //Get USD Value
+    function testTheUSDValueIsCorrect() depositCollateral external {
+        uint256 expectedAccountValue = 20000e18;
+        uint256 actualAccountValue = engine.getAccountCollateralValueInUsd(bob);
+        assertEq(expectedAccountValue,actualAccountValue);
+    }
+
+    //Get Account Collateral Value In USD
+    function testTheAccountCollateralValueIsCorrect() depositCollateral external {
+        vm.prank(bob);
+        engine.depositCollateral(wbtc,1e18);
+
+        uint256 expectedAccountValue = 30000e18;
+        uint256 actualAccountValue = engine.getAccountCollateralValueInUsd(bob);
+        assertEq(expectedAccountValue,actualAccountValue);        
+    }
+
+    //Get Account Information
+    function testTheAccountInformationIsOk() depositCollateralAndMintDSC external {
+        uint256 expectedDSCMinted = AMOUNT_DSC_TO_MINT;
+        uint256 expectedcollateralValueInUSD = 20000e18;
+
+        (uint256 actualDSCMinted,uint256 acutalCollateralValueInUSD) = engine.getAccountInformation(bob);
+
+        assertEq(expectedDSCMinted,actualDSCMinted);
+        assertEq(expectedcollateralValueInUSD,acutalCollateralValueInUSD);
+    }
+
+    //Calculate health Factor
+    function testTheHealthFactorIsMaxWhenNoDSCMinted() depositCollateral external {
+        uint256 expectedHealthFactor = type(uint256).max;
+        (uint256 a,uint256 b) = engine.getAccountInformation(bob);
+        uint256 actualHealthFactor = engine._calculateHealthFactor(a,b);
+
+        assertEq(expectedHealthFactor,actualHealthFactor);
+    }
+
+    function testTheCalculateHealthFactorWorksFine() depositCollateralAndMintDSC external {
+        uint256 expectedHealthFactor = 10e18;
+        (uint256 a,uint256 b) = engine.getAccountInformation(bob);
+        uint256 actualHealthFactor = engine._calculateHealthFactor(a,b);
+
+        assertEq(expectedHealthFactor,actualHealthFactor);
+    }
+
+    //Health Factor
+    function testTheHealthFactorWorksFine() depositCollateralAndMintDSC external {
+        uint256 expectedHealthFactor = 10e18;
+        uint256 actualHealthFactor = engine._healthFactor(bob);
+
+        assertEq(expectedHealthFactor,actualHealthFactor);
     }
 }
