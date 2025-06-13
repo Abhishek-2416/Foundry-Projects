@@ -34,6 +34,8 @@ contract TestDSCEngine is Test {
     //addresses
     address bob = makeAddr("bob");
     address alice = makeAddr("alice");
+    address liquidator = makeAddr("liquidator");
+    address liquidator2 = makeAddr("liquidator2");
 
     //constants
     uint256 private constant APPROVAL_AMOUNT = 10000e18;
@@ -62,6 +64,20 @@ contract TestDSCEngine is Test {
         ERC20Mock(weth).mint(alice,APPROVAL_AMOUNT);
         ERC20Mock(weth).approve(address(engine),APPROVAL_AMOUNT);
         dsc.approve(address(engine),APPROVAL_AMOUNT);
+        vm.stopPrank();
+
+        vm.startPrank(liquidator2);
+        ERC20Mock(weth).mint(liquidator2,APPROVAL_AMOUNT);
+        ERC20Mock(weth).approve(address(engine),APPROVAL_AMOUNT);
+        dsc.approve(address(engine),APPROVAL_AMOUNT);
+        engine.depositCollateralAndMintDSC(weth,2 ether,20e18);
+        vm.stopPrank();
+
+        vm.startPrank(liquidator);
+        ERC20Mock(weth).mint(liquidator,40000e18);
+        ERC20Mock(weth).approve(address(engine),40000e18);
+        dsc.approve(address(engine),40000e18);
+        engine.depositCollateralAndMintDSC(weth,10000 ether,40000e18);
         vm.stopPrank();
 
         wbtc = config.getActiveNetworkConfig().wbtc;
@@ -123,12 +139,12 @@ contract TestDSCEngine is Test {
     }
 
     function testTheCollateralTokenGetsTransferedToTheEngine() external {
-        assertEq(IERC20(weth).balanceOf(address(engine)),0);
+        assertEq(IERC20(weth).balanceOf(address(engine)),10002 ether);
 
         vm.prank(bob);
         engine.depositCollateral(address(weth),DEPOSIT_AMOUNT);
 
-        assertEq(IERC20(weth).balanceOf(address(engine)),DEPOSIT_AMOUNT);
+        assertEq(IERC20(weth).balanceOf(address(engine)),(10002 ether + DEPOSIT_AMOUNT));
     }
 
     function testThatDepositCollateralRevertsWhenTransferFails() external {
@@ -327,17 +343,112 @@ contract TestDSCEngine is Test {
         engine.liquidate(weth,bob,AMOUNT_DSC_TO_MINT);
     }
 
-    // function testWHenLiqudateTheCollateralGoesToLiquidator() depositCollateralAndMintDSC external {
-    //     vm.prank(alice);
-    //     engine.depositCollateralAndMintDSC(weth,100 ether,10000e18);
+    function testLiqudationCanBeCalledWhenStartingHealthFactorIsLow() external {
+        vm.prank(bob);
+        engine.depositCollateralAndMintDSC(weth,DEPOSIT_AMOUNT,AMOUNT_DSC_TO_MINT);
 
-    //     console.log("Alice DSC Balance",IERC20(dsc).balanceOf(alice));
+        vm.prank(alice);
+        engine.depositCollateralAndMintDSC(weth,100 ether,5000e18);
 
-    //     MockV3Aggregator(wethUsdPriceFeed).updateAnswer(20e8);
-    
-    //     vm.prank(alice);
-    //     engine.liquidate(weth,bob,900e18);
-    // }
+        MockV3Aggregator(wethUsdPriceFeed).updateAnswer(150e8);
+        
+        vm.prank(liquidator);
+        engine.liquidate(weth,bob,250e18);
+
+        vm.prank(liquidator);
+        vm.expectRevert(DSCEngine.DSCEngine__HealthFactorIsFine.selector);
+        engine.liquidate(weth,alice,350e18);
+    }
+
+    function testTheLiquidatorGetsBonusAfterLiquidating() external {
+        vm.prank(bob);
+        engine.depositCollateralAndMintDSC(weth,DEPOSIT_AMOUNT,AMOUNT_DSC_TO_MINT);
+
+        MockV3Aggregator(wethUsdPriceFeed).updateAnswer(150e8);
+
+        console.log(ERC20Mock(weth).balanceOf(liquidator));
+        assertEq(ERC20Mock(weth).balanceOf(liquidator),30000 ether);
+
+        vm.prank(liquidator);
+        engine.liquidate(weth,bob,250e18);
+
+        console.log(ERC20Mock(weth).balanceOf(liquidator));
+        assertGt(ERC20Mock(weth).balanceOf(liquidator),30001 ether);
+    }
+
+    function testAfterLiquidationTheDSCGetsBurnt() external {
+        vm.prank(bob);
+        engine.depositCollateralAndMintDSC(weth,DEPOSIT_AMOUNT,AMOUNT_DSC_TO_MINT);
+
+        MockV3Aggregator(wethUsdPriceFeed).updateAnswer(150e8);
+
+        console.log("DSC Balance Of Liquidator:",dsc.balanceOf(address(liquidator)));
+        assertEq(dsc.balanceOf(liquidator),40000 ether);
+
+        vm.prank(liquidator);
+        engine.liquidate(weth,bob,250e18);
+
+        assertEq(dsc.balanceOf(liquidator),(40000e18 - 250e18));
+        console.log("DSC Balance Of Liquidator After:",dsc.balanceOf(address(liquidator)));        
+    }
+
+    function testTheEndingHealthFactorShouldBeFineWhenLiquidated() external {
+        vm.prank(bob);
+        engine.depositCollateralAndMintDSC(weth,DEPOSIT_AMOUNT,AMOUNT_DSC_TO_MINT);
+
+        vm.prank(alice);
+        engine.depositCollateralAndMintDSC(weth,100 ether, 15000e18);
+
+        MockV3Aggregator(wethUsdPriceFeed).updateAnswer(150e8);
+
+        uint256 bobStartingHealthFactor = engine._healthFactor(bob);
+        vm.prank(liquidator);
+        engine.liquidate(weth,bob,250e18);
+        uint256 bobEndingHealthFactor = engine._healthFactor(bob);
+        assertGt(bobEndingHealthFactor,bobStartingHealthFactor);
+
+        console.log("Liquidator DSC Balance:",dsc.balanceOf(liquidator));
+        console.log("DSC allowance for engine", dsc.allowance(liquidator, address(engine)));
+
+        uint256 aliceStartingHealthFactor = engine._healthFactor(alice);
+        assert(aliceStartingHealthFactor<1e18);
+        vm.startPrank(liquidator);
+        vm.expectRevert(DSCEngine.DSCEngine__HealthFactorNotImproved.selector);
+        engine.liquidate(weth,alice,1500e18);
+        vm.stopPrank();
+        uint256 aliceEndingHealthFactor = engine._healthFactor(alice);
+        assert(aliceEndingHealthFactor<=aliceStartingHealthFactor);
+    }
+
+    function testMustImproveHealthFactorOnLiqudation() external {
+        /**
+         * Bob deposited 10 ether currently worth $20k
+         * Minted DSC $1000 worth only
+         */
+        vm.prank(bob);
+        engine.depositCollateralAndMintDSC(weth,DEPOSIT_AMOUNT,AMOUNT_DSC_TO_MINT);
+
+        /**
+         * Alice deposits 100 ether currently worth $200k
+         * Minted DSC $5000 only
+         */
+        vm.prank(alice);
+        engine.depositCollateralAndMintDSC(weth,100 ether,5000e18);
+
+        /**
+         * Now price of the collateral/weth will drop down to $150
+         * So now BOB condition is $1500 worth collateral but minted $1000 (threshold is 750)
+         * And Alice is $15000 and minted $5000 (threshold is 7500)
+         */
+        MockV3Aggregator(wethUsdPriceFeed).updateAnswer(150e8);
+
+        /**
+         * Alice can call liquidate on Bob
+         * And fill in the 
+         */
+        vm.prank(alice);
+        engine.liquidate(weth,bob,250e18);
+    }
 
     //Support Functions
     
