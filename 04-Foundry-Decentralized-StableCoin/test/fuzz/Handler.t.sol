@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+//Handler is going to narrow down the way we call functions and this way we dont waste the number of runs
+// So we can actually test it and find bugs
+
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import {ERC20Mock} from "../mocks/ERC20Mock.sol";
