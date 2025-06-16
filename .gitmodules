@@ -22,3 +22,6 @@
 [submodule "04-Foundry-Decentralized-StableCoin/lib/chainlink-brownie-contracts"]
 	path = 04-Foundry-Decentralized-StableCoin/lib/chainlink-brownie-contracts
 	url = https://github.com/smartcontractkit/chainlink-brownie-contracts
+[submodule "05-Foundry-Cross-Chain-Rebase-Token/lib/forge-std"]
+	path = 05-Foundry-Cross-Chain-Rebase-Token/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
