@@ -47,6 +47,9 @@ contract Vault{
      * Then we need to transfer them back their collateral
      */
     function redeem(uint256 _amount) external {
+        if(_amount == type(uint256).max){
+            _amount = i_rebaseToken.balanceOf(msg.sender);
+        }
         // Burn their tokens first
         i_rebaseToken.burn(msg.sender,_amount);
 
