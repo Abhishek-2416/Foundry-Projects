@@ -80,3 +80,44 @@
 5. Once finality and verification are complete, minted USDC is sent to the LP, reimbursing them for their pre-final liquidity.
 
 ✅ This approach dramatically reduces wait time for users while keeping the protocol secure and fully reconciled.
+
+# CCIP Architecture Understanding
+
+# ✅ Off-Ramp Architecture Summary (Cleaned Up)
+
+The **Off-Ramp architecture** in Chainlink CCIP consists of two main **off-chain components**:
+
+- 🛰️ **Execution DON**: Responsible for delivering messages.
+- 🛡️ **Risk Management Network (RMN)**: Independently verifies message safety via attestations.
+
+---
+
+## 🔁 Message Flow
+
+1. ✅ A user calls `ccipSend()` on the **source chain**, which emits an event via the `On-Ramp` contract.
+
+2. ✅ The **Execution DON** observes this event, constructs a **Merkle root** of the messages, and submits it to the **Off-Ramp contract** on the destination chain.
+
+3. 🔄 **In parallel**, the **Risk Management Network (RMN)**:
+   - Independently verifies the same messages by reading source chain logs.
+   - Reconstructs the Merkle root or message hash.
+   - If the message is valid, RMN nodes generate a **cryptographic attestation** (like a digital stamp).
+
+4. 🔐 The **Off-Ramp contract** checks the RMN attestation:
+   - It verifies that a **quorum** of RMN nodes signed the same Merkle root/message hash.
+   - Only if the attestation is valid, the system proceeds to the next step.
+
+5. 🚀 The **Execution DON** calls the Off-Ramp to finalize delivery.
+   - The Off-Ramp then invokes `ccipReceive()` on the target contract to deliver the message.
+
+---
+
+## 🛡️ Security Model
+
+This architecture ensures **defense-in-depth**:
+- ⚡ **Fast delivery** via Execution DON
+- 🔒 **Secure message approval** only if independently verified and attested by RMN
+
+This hybrid off-chain/on-chain model balances **efficiency** with **security guarantees**.
+
+

@@ -28,3 +28,6 @@
 [submodule "05-Foundry-Cross-Chain-Rebase-Token/lib/openzeppelin-contracts"]
 	path = 05-Foundry-Cross-Chain-Rebase-Token/lib/openzeppelin-contracts
 	url = https://github.com/openzeppelin/openzeppelin-contracts
+[submodule "05-Foundry-Cross-Chain-Rebase-Token/lib/ccip"]
+	path = 05-Foundry-Cross-Chain-Rebase-Token/lib/ccip
+	url = https://github.com/smartcontractkit/ccip
