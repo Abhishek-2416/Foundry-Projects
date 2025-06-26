@@ -62,12 +62,12 @@ contract RebaseToken is ERC20,Ownable,AccessControl{
      * @param _to The address of the user receiving the minted tokens
      * @param _amount The amount of new tokens to mint (based on their new deposit)
      */
-    function mint(address _to, uint256 _amount) external onlyRole(MINT_AND_BURN_ROLE){
+    function mint(address _to, uint256 _amount,uint256 _userInterestRate) external onlyRole(MINT_AND_BURN_ROLE){
         // 1. Mint any interest accrued from previous deposits using the user's old interest rate
         _mintAccruedInterest(_to);
 
         // 2. Update the user's interest rate to the current protocol rate for future accrual
-        s_userInterestRate[_to] = s_interestRate;
+        s_userInterestRate[_to] = _userInterestRate;
 
         // 3. Mint new tokens based on the latest deposit
         _mint(_to, _amount);
@@ -184,7 +184,7 @@ contract RebaseToken is ERC20,Ownable,AccessControl{
         return s_interestRate;
     }
 
-    function getMintAndBurnRole() external view returns(bytes32){
+    function getMintAndBurnRole() external pure returns(bytes32){
         return MINT_AND_BURN_ROLE;
     }
 }

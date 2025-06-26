@@ -121,3 +121,56 @@ This architecture ensures **defense-in-depth**:
 This hybrid off-chain/on-chain model balances **efficiency** with **security guarantees**.
 
 
+# 🔗 Full Chainlink CCIP Flow: On-Chain + Off-Chain
+
+## ✅ 1. User initiates cross-chain message
+- The user or dApp calls `ccipSend()` on the **Router contract** on the **source chain**.
+- The Router:
+  - Estimates the fee
+  - Locks or burns tokens if necessary
+  - Dispatches the message via `OnRamp` (emits event)
+
+---
+
+## 🛰️ 2. Execution DON observes the source chain
+- Reads emitted events and collects messages.
+- Builds a **Merkle root** from messages.
+- Submits the Merkle root and proof to the **destination Off-Ramp**.
+
+---
+
+## 🛡️ 3. Risk Management Network (RMN) acts in parallel
+- Independently reads the same events from source chain.
+- Verifies message safety.
+- If valid, signs an **attestation** (quorum-based approval).
+- Attestations are shared off-chain or submitted on-chain to the destination Off-Ramp.
+
+---
+
+## 🔄 4. Destination Off-Ramp verifies and finalizes
+- Verifies:
+  - Merkle proof (message inclusion)
+  - RMN attestations (security approval)
+- Unlocks or mints tokens if included in the message.
+- Delivers message to the receiver contract via `ccipReceive()`.
+
+---
+
+## 📥 5. Receiver contract processes message
+- The destination contract receives the data or tokens.
+- Executes business logic accordingly.
+
+---
+
+## ✅ Summary
+
+> Chainlink CCIP unifies off-chain and on-chain logic:
+> - **Execution DON** ensures message delivery
+> - **RMN** ensures message security
+> - **Router + OnRamp/OffRamp** ensure protocol enforcement on-chain
+
+
+
+
+
+![alt text](image.png)

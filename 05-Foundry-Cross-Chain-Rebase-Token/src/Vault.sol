@@ -36,8 +36,10 @@ contract Vault{
      * And then we are minting the tokens from the rebase tokens, directly to the user who had deposited collateral
      */
     function deposit() external payable{
+        //But also need to get the interest rate, now if you why in the deposit function this is becuase the CCIP router when it deposits the token from one chain to the other it will then need the interet rate of the user 
+        uint256 interestRate = i_rebaseToken.getInterestRate();
         // We need to use the amount of collateral the user has sent to mint tokens to the user
-        (i_rebaseToken).mint(msg.sender,msg.value);
+        (i_rebaseToken).mint(msg.sender,msg.value,interestRate);
         emit Deposited(msg.sender,msg.value);
     }
 
