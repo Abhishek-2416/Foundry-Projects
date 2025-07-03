@@ -30,7 +30,7 @@
 	url = https://github.com/openzeppelin/openzeppelin-contracts
 [submodule "05-Foundry-Cross-Chain-Rebase-Token/lib/ccip"]
 	path = 05-Foundry-Cross-Chain-Rebase-Token/lib/ccip
-	url = https://github.com/smartcontractkit/ccip
+	url = https://github.com/chainlink/ccip
 [submodule "05-Foundry-Cross-Chain-Rebase-Token/lib/chainlink-local"]
 	path = 05-Foundry-Cross-Chain-Rebase-Token/lib/chainlink-local
 	url = https://github.com/smartcontractkit/chainlink-local

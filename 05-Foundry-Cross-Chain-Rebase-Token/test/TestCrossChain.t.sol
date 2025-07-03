@@ -68,6 +68,8 @@ contract crossChainTest is Test{
         // Get network details for Sepolia fork (e.g., router, registry, rmn proxy)
         sepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
 
+        vm.makePersistent(address(sepoliaNetworkDetails.routerAddress));
+
         // Start impersonating the deployer (owner) account for Sepolia setup
         vm.startPrank(owner);
 
@@ -103,8 +105,6 @@ contract crossChainTest is Test{
         TokenAdminRegistry(sepoliaNetworkDetails.tokenAdminRegistryAddress)
             .setPool(address(sepoliaToken), address(sepoliaPool));
 
-        sepoliaRouter = new Router(sepoliaNetworkDetails.wrappedNativeAddress,sepoliaNetworkDetails.rmnProxyAddress);
-
         // Stop impersonating the owner
         vm.stopPrank();
 
@@ -115,6 +115,8 @@ contract crossChainTest is Test{
 
         // Get network details for Arbitrum Sepolia
         arbNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
+
+        vm.makePersistent(address(arbNetworkDetails.routerAddress));
 
         // Start impersonating owner account on Arbitrum Sepolia
         vm.startPrank(owner);
@@ -142,10 +144,51 @@ contract crossChainTest is Test{
         // NOTE: This uses Sepolia's registry for local simulation purposes
         TokenAdminRegistry(arbNetworkDetails.tokenAdminRegistryAddress)
             .setPool(address(arbSepoliaToken), address(arbSepoliaPool));
-
-        arbRouter = new Router(arbNetworkDetails.wrappedNativeAddress,arbNetworkDetails.rmnProxyAddress);
-        // Stop impersonating the owner
+        
         vm.stopPrank();
+
+        //Router Setup
+        //We are getting an error as we intializing an new router 
+        //We already had a router deployed and by doing this below we are making a fuss by 2 routers
+        //sepoliaRouter = new Router(sepoliaNetworkDetails.wrappedNativeAddress,sepoliaNetworkDetails.rmnProxyAddress);
+        sepoliaRouter = Router(sepoliaNetworkDetails.routerAddress);
+
+        //arbRouter = new Router(arbNetworkDetails.wrappedNativeAddress,arbNetworkDetails.rmnProxyAddress);
+        arbRouter = Router(arbNetworkDetails.routerAddress);
+
+        address sepoliaRouterOwner = address(sepoliaRouter.owner());
+        address arbRouterOwner = address(arbRouter.owner());
+
+        //OnRamp
+        Router.OnRamp[] memory sepoliaOnRampUpdates = new Router.OnRamp[](1);
+        sepoliaOnRampUpdates[0] = Router.OnRamp({
+            destChainSelector: arbNetworkDetails.chainSelector,
+            onRamp: arbRouter.getOnRamp(arbNetworkDetails.chainSelector)
+        });
+        Router.OnRamp[] memory arbOnRampUpdates = new Router.OnRamp[](1);
+        arbOnRampUpdates[0] = Router.OnRamp({
+            destChainSelector: sepoliaNetworkDetails.chainSelector,
+            onRamp: sepoliaRouter.getOnRamp(sepoliaNetworkDetails.chainSelector)
+        });
+
+        //OffRampRemovals
+        Router.OffRamp[] memory sepoliaOffRampRemoves = new Router.OffRamp[](0);
+        Router.OffRamp[] memory arbOffRampRemoves = new Router.OffRamp[](0);
+        
+        //OffRampAdds
+        vm.selectFork(sepoliaFork);
+        Router.OffRamp[] memory sepoliaOffRampAdds = sepoliaRouter.getOffRamps();
+
+        vm.selectFork(arbSepoliaFork);
+        Router.OffRamp[] memory arbOffRampAdds = arbRouter.getOffRamps();
+        
+        vm.selectFork(sepoliaFork);
+        vm.prank(sepoliaRouterOwner);
+        sepoliaRouter.applyRampUpdates(sepoliaOnRampUpdates,sepoliaOffRampRemoves,sepoliaOffRampAdds);
+        
+        vm.selectFork(arbSepoliaFork);
+        vm.prank(arbRouterOwner);
+        arbRouter.applyRampUpdates(arbOnRampUpdates,arbOffRampRemoves,arbOffRampAdds);
 
         // Configuring tokens to be able to work cross chain
         configureTokenPool(sepoliaFork,address(sepoliaPool),arbNetworkDetails.chainSelector,true,address(arbSepoliaPool),address(arbSepoliaToken));
@@ -169,32 +212,6 @@ contract crossChainTest is Test{
             inboundRateLimiterConfig: RateLimiter.Config({isEnabled: false,capacity: 0,rate:0})
         });
         TokenPool(localPool).applyChainUpdates(chainsToAdd);
-        
-
-        //On Ramp and Off Ramp Configuration
-        //OnRamp
-        Router.OnRamp[] memory sepoliaOnRampUpdates = new Router.OnRamp[](1);
-        sepoliaOnRampUpdates[0] = Router.OnRamp({
-            destChainSelector: arbNetworkDetails.chainSelector,
-            onRamp: sepoliaRouter.getOnRamp(arbNetworkDetails.chainSelector)
-        });
-
-        Router.OnRamp[] memory arbOnRampUpdates = new Router.OnRamp[](1);
-        sepoliaOnRampUpdates[0] = Router.OnRamp({
-            destChainSelector: sepoliaNetworkDetails.chainSelector,
-            onRamp: sepoliaRouter.getOnRamp(sepoliaNetworkDetails.chainSelector)
-        });
-
-        //OffRampRemovals
-        Router.OffRamp[] memory sepoliaOffRampRemoves = new Router.OffRamp[](0);
-        Router.OffRamp[] memory arbOffRampRemoves = new Router.OffRamp[](0);
-
-        //OffRampAdds
-        Router.OffRamp[] memory sepoliaOffRampAdds = sepoliaRouter.getOffRamps();
-        Router.OffRamp[] memory arbOffRampAdds = arbRouter.getOffRamps();
-
-        sepoliaRouter.applyRampUpdates(sepoliaOnRampUpdates,sepoliaOffRampRemoves,sepoliaOffRampAdds);
-        arbRouter.applyRampUpdates(arbOnRampUpdates,arbOffRampRemoves,arbOffRampAdds);
     }
 
     function bridgeTokens(uint256 amountToBridge,uint256 localFork, uint256 remoteFork,Register.NetworkDetails memory localNetworkDetails,Register.NetworkDetails memory remoteNetworkDetails,RebaseToken localToken,RebaseToken remoteToken) public {
@@ -242,6 +259,7 @@ contract crossChainTest is Test{
         uint256 remoteBalanceBefore = remoteToken.balanceOf(bob);
 
         //Sending the token to the remote chain
+        vm.selectFork(localFork);
         ccipLocalSimulatorFork.switchChainAndRouteMessage(remoteFork);
 
         //Getting balance after
@@ -266,6 +284,6 @@ contract crossChainTest is Test{
         //Now we bridge tokens
         bridgeTokens(SEND_VALUE,sepoliaFork,arbSepoliaFork,sepoliaNetworkDetails,arbNetworkDetails,sepoliaToken,arbSepoliaToken);
 
-        //assertEq(arbSepoliaToken.balanceOf(bob),SEND_VALUE);
+        // assertEq(arbSepoliaToken.balanceOf(bob),SEND_VALUE);
     }
 }
