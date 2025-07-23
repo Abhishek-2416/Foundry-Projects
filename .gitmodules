@@ -34,3 +34,9 @@
 [submodule "05-Foundry-Cross-Chain-Rebase-Token/lib/chainlink-local"]
 	path = 05-Foundry-Cross-Chain-Rebase-Token/lib/chainlink-local
 	url = https://github.com/smartcontractkit/chainlink-local
+[submodule "06-Airdrop-And-Signatures/lib/forge-std"]
+	path = 06-Airdrop-And-Signatures/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "06-Airdrop-And-Signatures/lib/openzeppelin-contracts"]
+	path = 06-Airdrop-And-Signatures/lib/openzeppelin-contracts
+	url = https://github.com/openzeppelin/openzeppelin-contracts
