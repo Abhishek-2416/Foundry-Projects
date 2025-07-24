@@ -68,5 +68,5 @@ contract MerkleAirdrop {
         return i_airdropToken;
     }
 
-    
+
 }
