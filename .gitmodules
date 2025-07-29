@@ -49,3 +49,6 @@
 [submodule "06-MerkleAirdrop-And-Signatures/lib/openzeppelin-contracts"]
 	path = 06-MerkleAirdrop-And-Signatures/lib/openzeppelin-contracts
 	url = https://github.com/openzeppelin/openzeppelin-contracts
+[submodule "06-MerkleAirdrop-And-Signatures/lib/murky"]
+	path = 06-MerkleAirdrop-And-Signatures/lib/murky
+	url = https://github.com/dmfxyz/murky
