@@ -1,66 +1,65 @@
-## Foundry
+# Upgradeable Smart Contracts — Proxy Concepts
+## 1. The Key Players in a Proxy Setup
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+### A. Proxy Contract
+- The contract users actually interact with.
+- Has:
+  - **Storage** (persistent variables, balances, mappings, etc.).
+  - **Upgrade control** (to change the implementation address).
+  - A **fallback function** to forward calls to the implementation.
+- **Never changes address** — it’s the “front door” of your system.
 
-Foundry consists of:
+### B. Implementation Contract (a.k.a. Logic Contract)
+- Contains the actual **function code** (business logic).
+- Has **no user data stored** in it (its own storage is irrelevant in practice).
+- Can be replaced/upgraded without changing the proxy address.
+- The proxy uses `delegatecall` to run this contract’s code **as if it’s its own**.
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+### C. Admin
+- The entity (address or multisig) with permission to change the proxy’s implementation pointer.
+- In **transparent proxies**, the admin can also make special “upgrade” calls that users can’t.
 
-## Documentation
+### D. Beacon Contract *(optional)*
+- Holds the address of the current implementation.
+- Useful if you have **many proxies** and want to upgrade all of them at once by just updating the beacon.
 
-https://book.getfoundry.sh/
+### E. Delegatecall
+- An **EVM instruction** that runs another contract’s code but **uses the storage, balance, and context of the calling contract**.
+- This is the magic that makes the implementation’s functions work on the proxy’s data.
 
-## Usage
+---
 
-### Build
+## 2. How a Call Works
 
-```shell
-$ forge build
-```
+**Example:** A user calls `transfer(address to, uint amount)`.
 
-### Test
+1. Call hits the **Proxy Contract**.
+2. Proxy doesn’t have a `transfer()` function, so it falls into its `fallback()` function.
+3. `fallback()` uses `delegatecall` to forward the call to the **Implementation Contract**.
+4. The implementation code executes **but reads/writes variables in the Proxy Contract’s storage**.
+5. Result is returned to the user as if the proxy did it.
 
-```shell
-$ forge test
-```
+---
 
-### Format
+## 3. Types of Proxies
 
-```shell
-$ forge fmt
-```
+- **Transparent Proxy** → Admin functions & user functions are separated to avoid selector clashes.
+- **UUPS Proxy** → Upgrade function lives in the implementation itself (simpler proxy).
+- **Beacon Proxy** → Implementation address lives in a shared beacon for multiple proxies.
+- **Diamond Proxy (EIP-2535)** → Splits logic across many implementation contracts (“facets”).
 
-### Gas Snapshots
+---
 
-```shell
-$ forge snapshot
-```
+## 4. Common Risks
 
-### Anvil
+### A. Storage Clash (a.k.a. Storage Collision)
+- The **storage layout** of the proxy’s data **must** match what the implementation expects.
+- If you upgrade and reorder or change types of variables, the implementation writes to the wrong slots — **corrupting data**.
 
-```shell
-$ anvil
-```
+**Example:**
+```solidity
+// v1
+uint256 public balance;   // slot 0
 
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+// v2
+address public owner;     // slot 0  <-- Now overwrites balance!
